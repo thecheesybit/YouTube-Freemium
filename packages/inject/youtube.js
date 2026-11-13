@@ -281,6 +281,8 @@
       css += ' ytm-mobile-topbar-renderer, ytm-pivot-bar-renderer { display: none !important; }';
       css += ' #player-container-id { top: 0 !important; }';
       css += ' body, ytm-app, #app, ytm-watch { padding-top: 0 !important; margin-top: 0 !important; }';
+      // YouTube pins the "All / For you" row at offsets that include the hidden 48px top bar; pin it right under the video (full width, 16:9).
+      css += ' ytm-related-chip-cloud-renderer, ytm-related-chip-cloud-renderer.chips-visible { top: 56.25vw !important; }';
     }
     style.textContent = css;
     (document.head || document.documentElement).appendChild(style);
