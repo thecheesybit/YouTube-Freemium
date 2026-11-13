@@ -471,6 +471,7 @@ public class MainActivity extends BridgeActivity {
         island = new IslandController(this, repo, prefs, health, launch, cfg.tv, settings::show,
                 () -> bridge.getWebView().requestFocus());
         chrome.setFullscreenListener(island::onFullscreen);
+        if (player != null) player.chrome().setFullscreenListener(island::onFullscreen);
         if (cfg.tv) setupTv();
         loadingUi.setProgressListener(p -> {
             launch.onProgress(p);

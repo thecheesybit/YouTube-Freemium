@@ -79,7 +79,7 @@ public class ShellWebChromeClient extends BridgeWebChromeClient {
     @Override
     public void onProgressChanged(WebView view, int newProgress) {
         super.onProgressChanged(view, newProgress);
-        loadingUi.onProgress(newProgress);
+        if (loadingUi != null) loadingUi.onProgress(newProgress); // null for the player WebView
     }
 
     /** Called on the UI thread whenever web fullscreen starts or ends. */
@@ -111,7 +111,7 @@ public class ShellWebChromeClient extends BridgeWebChromeClient {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         ((ViewGroup) w.getDecorView()).addView(customContainer, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        loadingUi.setSuppressed(true);
+        if (loadingUi != null) loadingUi.setSuppressed(true);
         w.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         WindowManager.LayoutParams lp = w.getAttributes();
         lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
@@ -132,7 +132,7 @@ public class ShellWebChromeClient extends BridgeWebChromeClient {
         customContainer.removeAllViews();
         customContainer = null;
         customView = null;
-        loadingUi.setSuppressed(false);
+        if (loadingUi != null) loadingUi.setSuppressed(false);
         applyOrientation(false);
         w.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         WindowManager.LayoutParams lp = w.getAttributes();

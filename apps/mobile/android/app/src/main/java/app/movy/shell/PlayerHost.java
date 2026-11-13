@@ -81,6 +81,10 @@ final class PlayerHost {
         float density = activity.getResources().getDisplayMetrics().density;
         this.bottomNavHeightPx = Math.round(48 * density); // ytm-pivot-bar-renderer height
 
+        // Capacitor's chrome client calls registerForActivityResult, which throws once the activity is STARTED:
+        // it must be built here (constructed from MainActivity.load(), during onCreate), not on the first video.
+        chrome = new ShellWebChromeClient(bridge, activity, cfg, rules, stats, null);
+
         buildContainer();
     }
 
@@ -193,7 +197,6 @@ final class PlayerHost {
         AdblockWebViewClient client = new AdblockWebViewClient(bridge, cfg, rules, stats);
         playerWebView.setWebViewClient(client);
 
-        chrome = new ShellWebChromeClient(bridge, activity, cfg, rules, stats, null);
         playerWebView.setWebChromeClient(chrome);
 
         mediaBridge = new MediaBridge("player", (isPlay, isVid, title, artist, art, dur, pos, w, h, l, t, r, b) -> {
