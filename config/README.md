@@ -50,3 +50,16 @@ Release APKs are signed with `config/signing.json` if present:
 Otherwise a stable per-app key is generated once at `%USERPROFILE%\.movy\keystore\<app>.jks` (passwords in `<app>.properties` beside it).
 **Back that folder up**: updates must use the same key, and a lost key means uninstalling the app, which erases its logins.
 An old `.cache/keystore/movy-debug.jks` is copied there for apps that were already built with it. `install:android` always uses `adb install -r` and never uninstalls.
+
+### Updating over someone else's install (collaborators)
+
+Android only accepts an update when the `appId` and the signing key are the same and the build number (`versionCode`) is higher.
+To ship updates for an app another person already runs:
+
+1. Get their `<app>.jks` and `<app>.properties` **privately** (never commit or post them; `*.jks` is git-ignored) and put both in `%USERPROFILE%\.movy\keystore\`.
+   The build then signs with that key automatically (see above).
+2. Make sure your build number is above the installed one: set a floor in `config/apps/.build-numbers.json` (`{ "<app>": N }`) or pass `--build-number N`.
+3. `npm run install:android -- --app <app> --target phone` installs over the existing app, keeping its data and logins.
+
+If the app was signed with a different key, Android refuses the update; the only fix is to uninstall (which erases its data).
+A private one-file bootstrap (`restore-private.mjs`, git-ignored) can write these files for you; never commit it.

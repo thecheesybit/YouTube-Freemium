@@ -38,3 +38,6 @@ config/remote/
 firebase-debug.log
 .firebaserc
 config/apps/.build-numbers.json
+
+# Private setup script (contains secrets / signing key, never commit)
+restore-private.mjs
