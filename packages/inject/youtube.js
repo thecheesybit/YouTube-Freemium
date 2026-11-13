@@ -5,6 +5,10 @@
   const DEBUG = false;
   const IS_TOP = window.top === window;
 
+  let ROLE = 'browse';
+  try { if (window.YouTubeFreemiumBridge && window.YouTubeFreemiumBridge.role) ROLE = window.YouTubeFreemiumBridge.role(); } catch (e) {}
+  const IS_PHONE_SPLIT = (ROLE === 'browse' || ROLE === 'player') && !location.host.includes('music.youtube.com');
+
   // A. No "Are you sure you want to leave this page?" prompt when switching apps/sources
   try {
     window.addEventListener('beforeunload', (e) => { e.stopImmediatePropagation(); }, true);
@@ -215,6 +219,14 @@
       'ytd-display-ad-renderer',
       '.ytp-ad-overlay-container',
       'ytm-promoted-sparkles-web-renderer',
+      'ytm-promoted-sparkles-text-search-renderer',
+      'ytm-promoted-video-renderer',
+      'ytm-companion-slot',
+      'ytm-companion-ad-renderer',
+      'ytm-statement-banner-renderer',
+      'ad-slot-renderer',
+      'ytm-rich-item-renderer:has(ad-slot-renderer)',
+      'ytm-item-section-renderer:has(> lazy-list > ad-slot-renderer)',
       '#player-ads',
       'ytd-in-feed-ad-layout-renderer',
       'ytd-banner-promo-renderer',
@@ -257,13 +269,152 @@
     ]
   };
 
-  // Inject CSS to hide static ad containers
+  // Inject CSS to hide static ad containers & apply native app styling
   try {
     const style = document.createElement('style');
     style.id = 'ytf-ad-hide-css';
-    style.textContent = '@keyframes ytfspin{to{transform:rotate(360deg)}} ' + SELECTORS.adContainers.join(', ') + ', ytm-open-app-button-renderer, .open-app-button, ytm-app-banner-renderer, ytm-mealbar-promo-renderer, ytm-upsell-dialog-renderer, a[href*="play.google.com/store/apps/details?id=com.google.android.youtube"] { display: none !important; }';
+    let css = '@keyframes ytfspin{to{transform:rotate(360deg)}} ' + SELECTORS.adContainers.join(', ') + ', ytm-open-app-button-renderer, .open-app-button, ytm-app-banner-renderer, ytm-mealbar-promo-renderer, ytm-upsell-dialog-renderer, a[href*="play.google.com/store/apps/details?id=com.google.android.youtube"] { display: none !important; }';
+    css += ' * { -webkit-tap-highlight-color: transparent !important; }';
+    css += ' body { -webkit-user-select: none !important; -webkit-touch-callout: none !important; }';
+    css += ' input, textarea { -webkit-user-select: text !important; }';
+    if (IS_PHONE_SPLIT && ROLE === 'player') {
+      css += ' ytm-mobile-topbar-renderer, ytm-pivot-bar-renderer { display: none !important; }';
+      css += ' #player-container-id { top: 0 !important; }';
+      css += ' body, ytm-app, #app, ytm-watch { padding-top: 0 !important; margin-top: 0 !important; }';
+    }
+    style.textContent = css;
     (document.head || document.documentElement).appendChild(style);
   } catch (e) {}
+
+  // Native share sheet bridge
+  try {
+    if (typeof navigator !== 'undefined') {
+      navigator.share = function (d) {
+        const u = (d && d.url) || location.href;
+        const t = (d && d.title) || document.title || '';
+        if (window.YouTubeFreemiumBridge && window.YouTubeFreemiumBridge.share) {
+          window.YouTubeFreemiumBridge.share(u, t);
+        }
+        return Promise.resolve();
+      };
+    }
+  } catch (e) {}
+
+  // Status bar theme color reporter
+  function reportThemeColor() {
+    try {
+      if (document.body && window.YouTubeFreemiumBridge && window.YouTubeFreemiumBridge.themeColor) {
+        const bg = getComputedStyle(document.body).backgroundColor;
+        if (bg) window.YouTubeFreemiumBridge.themeColor(bg);
+      }
+    } catch (e) {}
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', reportThemeColor);
+  } else {
+    reportThemeColor();
+  }
+  try {
+    const themeObserver = new MutationObserver(reportThemeColor);
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['dark'] });
+  } catch (e) {}
+
+  // Two-WebView click routing
+  if (IS_PHONE_SPLIT) {
+    if (ROLE === 'browse') {
+      document.addEventListener('click', (e) => {
+        const a = e.target && e.target.closest && e.target.closest('a[href]');
+        if (!a) return;
+        try {
+          const u = new URL(a.href, document.baseURI);
+          if (u.pathname === '/watch') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            if (window.YouTubeFreemiumBridge && window.YouTubeFreemiumBridge.openVideo) {
+              window.YouTubeFreemiumBridge.openVideo(a.href);
+            }
+          }
+        } catch (err) {}
+      }, true);
+    } else if (ROLE === 'player') {
+      document.addEventListener('click', (e) => {
+        const a = e.target && e.target.closest && e.target.closest('a[href]');
+        if (!a) return;
+        try {
+          const u = new URL(a.href, document.baseURI);
+          if (u.pathname !== '/watch') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            if (window.YouTubeFreemiumBridge && window.YouTubeFreemiumBridge.openBrowse) {
+              window.YouTubeFreemiumBridge.openBrowse(a.href);
+            }
+          }
+        } catch (err) {}
+      }, true);
+
+      // Swipe down to minimize & hold 500ms to play at 2x
+      let touchStartY = 0;
+      let touchStartX = 0;
+      let isTouchOnPlayer = false;
+      let holdTimer = null;
+      let originalRate = 1;
+
+      window.addEventListener('touchstart', (e) => {
+        const t = e.touches && e.touches[0];
+        if (!t) return;
+        touchStartY = t.clientY;
+        touchStartX = t.clientX;
+        const target = e.target;
+        isTouchOnPlayer = !!(target && target.closest && (target.closest('#player-container-id') || target.closest('video') || target.closest('.html5-video-player')));
+
+        if (isTouchOnPlayer && !document.fullscreenElement && !document.webkitFullscreenElement) {
+          const v = findMainVideo();
+          if (v && !v.paused) {
+            originalRate = v.playbackRate || savedRate();
+            holdTimer = setTimeout(() => {
+              if (v && !v.paused) v.playbackRate = 2.0;
+            }, 500);
+          }
+        }
+      }, { capture: true, passive: true });
+
+      window.addEventListener('touchmove', (e) => {
+        const t = e.touches && e.touches[0];
+        if (!t) return;
+        if (Math.abs(t.clientY - touchStartY) > 10 || Math.abs(t.clientX - touchStartX) > 10) {
+          if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+        }
+      }, { capture: true, passive: true });
+
+      window.addEventListener('touchend', (e) => {
+        if (holdTimer) {
+          clearTimeout(holdTimer);
+          holdTimer = null;
+          const v = findMainVideo();
+          if (v && v.playbackRate === 2.0) v.playbackRate = originalRate;
+        }
+        const t = e.changedTouches && e.changedTouches[0];
+        if (!t || !isTouchOnPlayer) return;
+        const dy = t.clientY - touchStartY;
+        const dx = Math.abs(t.clientX - touchStartX);
+        const fs = document.fullscreenElement || document.webkitFullscreenElement;
+        if (dy > 80 && dy > dx * 1.5 && !fs) {
+          if (window.YouTubeFreemiumBridge && window.YouTubeFreemiumBridge.minimize) {
+            window.YouTubeFreemiumBridge.minimize();
+          }
+        }
+      }, { capture: true, passive: true });
+
+      window.addEventListener('touchcancel', () => {
+        if (holdTimer) {
+          clearTimeout(holdTimer);
+          holdTimer = null;
+          const v = findMainVideo();
+          if (v && v.playbackRate === 2.0) v.playbackRate = originalRate;
+        }
+      }, { capture: true, passive: true });
+    }
+  }
 
   // 3. Ad skipper & Terms Enforcement bypass
   let adCheckInterval = null;
@@ -281,7 +432,8 @@
   }
 
   function findMainVideo() {
-    return document.querySelector('video.html5-main-video') || document.querySelector('video');
+    const vs = [...document.querySelectorAll('video')];
+    return vs.find((v) => !v.paused && v.readyState > 2) || document.querySelector('video.html5-main-video') || vs[0] || null;
   }
 
 
@@ -300,28 +452,7 @@
     } catch (e) {}
   }
 
-  // The pill must never outlive the ad: drop it as soon as the player is no longer in ad mode
-  setInterval(() => {
-    if (adNotified && !isAdPlaying()) {
-      adState.active = false;
-      showAdCaption(false);
-    }
-  }, 250);
-  document.addEventListener('playing', () => { if (adNotified && !isAdPlaying()) showAdCaption(false); }, true);
-
-  // If an ad refuses to be skipped for 4 s, reload the page once for that video (the fresh response has no ads).
-  function reloadOnceForAd() {
-    try {
-      const id = videoIdOf(location.href) || location.pathname;
-      const key = 'ytf_adreload_' + id;
-      if (sessionStorage.getItem(key)) return;
-      sessionStorage.setItem(key, '1');
-      const v = findMainVideo();
-      const saved = JSON.parse(localStorage.getItem('ytf_last') || 'null');
-      if (saved && saved.id === videoIdOf(location.href)) saved.at = Date.now();
-      location.reload();
-    } catch (e) {}
-  }
+  const SKIP_SEL = SELECTORS.skipButtons.join(', ');
 
   // Some builds ignore a bare click(): send the full pointer sequence first.
   function pressSkip(btn) {
@@ -333,19 +464,30 @@
     btn.click();
   }
 
+  let lastDialogCheck = 0;
+
   function checkAndSkipAds() {
     try {
+      // Folded from former 250ms interval: drop pill immediately when ad is no longer active
+      if (adNotified && !isAdPlaying()) {
+        adState.active = false;
+        showAdCaption(false);
+      }
+
       // A. Click skip button if present
-      for (const sel of SELECTORS.skipButtons) {
-        const btn = document.querySelector(sel);
-        if (btn && typeof btn.click === 'function') {
-          pressSkip(btn);
-          break;
-        }
+      const skipBtn = document.querySelector(SKIP_SEL);
+      if (skipBtn && typeof skipBtn.click === 'function') {
+        pressSkip(skipBtn);
+      }
+
+      const isAdShowing = isAdPlaying();
+      if (!isAdShowing && !adState.active) {
+        const now = Date.now();
+        if (now - lastDialogCheck < 1000) return;
+        lastDialogCheck = now;
       }
 
       // B. Fast forward & mute ad video (restored as soon as the ad is gone)
-      const isAdShowing = isAdPlaying();
       const video = findMainVideo();
       if (video) {
         if (isAdShowing) {
@@ -357,8 +499,7 @@
           }
           video.muted = true;
           video.playbackRate = 16.0;
-          showAdCaption(true);
-          if (Date.now() - adState.since > 4000) reloadOnceForAd();
+          if (Date.now() - adState.since > 1000) showAdCaption(true);
           if (Number.isFinite(video.duration) && video.duration > 0 && video.duration < 1200) {
             video.currentTime = Math.max(video.duration - 0.1, 0);
           }
@@ -396,35 +537,38 @@
     }
   }
 
-  function startAdObserver() {
-    checkAndSkipAds();
+  let observedPlayer = null;
+  let playerObserver = null;
 
-    const observer = new MutationObserver(() => {
-      checkAndSkipAds();
-      const isAdShowing = isAdPlaying();
-      if (isAdShowing && !adCheckInterval) {
-        adCheckInterval = setInterval(checkAndSkipAds, 100);
-      } else if (!isAdShowing && adCheckInterval) {
-        clearInterval(adCheckInterval);
-        adCheckInterval = null;
+  function updatePlayerObserver() {
+    const player = document.querySelector('#movie_player, .html5-video-player');
+    if (player !== observedPlayer) {
+      if (playerObserver) {
+        playerObserver.disconnect();
+        playerObserver = null;
       }
-    });
-
-    observer.observe(document.documentElement || document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['class', 'style']
-    });
+      observedPlayer = player;
+      if (player) {
+        playerObserver = new MutationObserver(() => {
+          checkAndSkipAds();
+        });
+        playerObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
+      }
+    }
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', startAdObserver);
-  } else {
-    startAdObserver();
-  }
-  // Safety net: poll even when no DOM mutation announces the ad (the skip button appears after a countdown).
-  setInterval(checkAndSkipAds, 250);
+  updatePlayerObserver();
+  // Keep one 250ms poll: checks ads, ensures observer is attached, and pauses videos on browse /watch
+  setInterval(() => {
+    updatePlayerObserver();
+    checkAndSkipAds();
+    if (IS_PHONE_SPLIT && ROLE === 'browse' && location.pathname === '/watch') {
+      const vs = document.querySelectorAll('video');
+      for (const v of vs) {
+        if (!v.paused) try { v.pause(); } catch (e) {}
+      }
+    }
+  }, 250);
 
   // 4. Media State & Metadata Bridge for PiP, MediaSession & PlaybackService
   let lastReportedState = {
@@ -532,21 +676,6 @@
       const bridge = window.YouTubeFreemiumBridge;
       if (!bridge) return;
 
-      if (miniFront() && mini.box) {
-        const r = mini.box.getBoundingClientRect();
-        const playingMini = mini.state === 1 || mini.state === 3;
-        const sigM = ['m', playingMini, mini.id, mini.title].join('|');
-        const nowM = Date.now();
-        if (sigM === lastSig && nowM - lastSentAt < 5000) return;
-        lastSig = sigM;
-        lastSentAt = nowM;
-        if (DEBUG) ytfLog('report mini playing=' + playingMini + ' state=' + mini.state + ' t=' + (mini.t | 0));
-        bridge.reportMediaState(playingMini, true, mini.title || 'YouTube', 'YouTube',
-          'https://i.ytimg.com/vi/' + mini.id + '/hqdefault.jpg', mini.duration || 0, mini.t || 0, 16, 9,
-          Math.max(0, Math.round(r.left)), Math.max(0, Math.round(r.top)), Math.max(0, Math.round(r.right)), Math.max(0, Math.round(r.bottom)));
-        return;
-      }
-
       const playing = video ? !video.paused && !video.ended : false;
       const isMusicHost = location.host.includes('music.youtube.com');
       const isVideo = video ? (video.videoWidth > 0 && !isMusicHost) : false;
@@ -615,7 +744,6 @@
   // 5. PiP: show ONLY the video. Every sibling along the video's ancestor chain is hidden and the
   //    chain is stretched to the viewport, so nothing else of the page appears in the small window.
   let inPip = false;
-  try { inPip = sessionStorage.getItem('ytf_inpip') === '1'; } catch (e) {}
   let pipSaved = [];
 
   // PiP isolation uses attributes + one stylesheet (not inline styles), so leaving PiP just removes
@@ -664,6 +792,12 @@
   function pipExit() {
     for (const it of pipSaved) it.el.removeAttribute(it.attr);
     pipSaved = [];
+    const leftover = document.querySelectorAll('[data-ytf-pip],[data-ytf-hide],[data-ytf-pip-root]');
+    for (const el of leftover) {
+      el.removeAttribute('data-ytf-pip');
+      el.removeAttribute('data-ytf-hide');
+      el.removeAttribute('data-ytf-pip-root');
+    }
     const st = document.getElementById('ytf-pip-css');
     if (st) st.remove();
     window.dispatchEvent(new Event('resize'));
@@ -671,15 +805,12 @@
   }
 
   // `native` (desktop): the host opens the browser's own PiP window for the video, so the page is never restyled.
-  // Only the PiP flag, the resume guards and the mini-player conversion apply. Returns 'mini' when the mini player
-  // was turned into the real watch page (the host retries once that page has a video), else 'ok'.
+  // Only the PiP flag and the resume guards apply. Returns 'ok' when native is true.
   let pipNative = false;
   window.__ytf_setPip = function (entering, native) {
-    if (DEBUG) ytfLog('setPip ' + entering + ' native=' + !!native + ' fs=' + !!(document.fullscreenElement || document.webkitFullscreenElement) + ' path=' + location.pathname + ' video=' + !!findMainVideo() + ' mini=' + mini.active);
+    if (DEBUG) ytfLog('setPip ' + entering + ' native=' + !!native + ' fs=' + !!(document.fullscreenElement || document.webkitFullscreenElement) + ' path=' + location.pathname + ' video=' + !!findMainVideo());
     inPip = !!entering;
     pipNative = !!native && !!entering;
-    if (!native) { try { sessionStorage.setItem('ytf_inpip', entering ? '1' : '0'); } catch (e) {} }
-    if (entering && restoreMiniToPage()) return native ? 'mini' : undefined;
     if (native) {
       nativeGraceUntil = Date.now() + 4000;
       setTimeout(window.__ytf_resumeIfWanted, 400);
@@ -690,8 +821,7 @@
     setTimeout(window.__ytf_resumeIfWanted, 400);
     setTimeout(window.__ytf_resumeIfWanted, 1500);
     try {
-      if (miniFront() || (!entering && mini.active && mini.box && mini.box.style.width === '100vw')) miniPip(!!entering);
-      else if (entering) pipEnter(); else pipExit();
+      if (entering) pipEnter(); else pipExit();
     } catch (e) {}
   };
 
@@ -700,7 +830,7 @@
     try {
       wantPlaying = true;
       const v = findMainVideo();
-      if (miniFront()) miniCmd('playVideo'); else if (v) v.play();
+      if (v) v.play();
     } catch (e) {}
   };
 
@@ -708,7 +838,7 @@
     try {
       wantPlaying = false;
       const v = findMainVideo();
-      if (miniFront()) miniCmd('pauseVideo'); else if (v) v.pause();
+      if (v) v.pause();
     } catch (e) {}
   };
 
@@ -756,11 +886,7 @@
 
   window.__ytf_setBg = function (bg) {
     window.__ytf_bg = !!bg;
-    try {
-      if (IS_TOP && mini.active && mini.frame) mini.frame.contentWindow.postMessage(JSON.stringify({ ytf: 'bg', v: !!bg }), '*');
-    } catch (e) {}
     nativeGraceUntil = Date.now() + 4000;
-    if (bg && restoreMiniToPage()) return;
     if (bgTimer) { clearInterval(bgTimer); bgTimer = null; }
     if (bg) {
       window.__ytf_resumeIfWanted();
@@ -783,9 +909,7 @@
   window.__ytf_resumeIfWanted = function () {
     try {
       const v = findMainVideo();
-      if (miniFront()) {
-        if (wantPlaying && (mini.state === 2 || window.__ytf_bg)) miniCmd('playVideo');
-      } else if (wantPlaying && v && v.paused && !v.ended) v.play().catch(() => {});
+      if (wantPlaying && v && v.paused && !v.ended) v.play().catch(() => {});
     } catch (e) {}
   };
 
@@ -801,6 +925,7 @@
   // A pause right after a finger touch is the user's; anything else while the app is in the
   // background (or right after a screen/PiP transition) is the system's and is undone.
   document.addEventListener('pause', (e) => {
+    if (location.pathname.startsWith('/shorts')) return;
     const v = e.target;
     if (!v || v.tagName !== 'VIDEO' || v.ended || adState.active) return;
     saveProgress(true);
@@ -892,27 +1017,15 @@
            pt.clientY >= r.top - pad && pt.clientY <= r.bottom + pad;
   }
   function speedChipHit(e) { return controlHit(e, 'ytf-speed'); }
-  function pipBtnHit(e) { return controlHit(e, 'ytf-pipbtn'); }
-
-  // PiP button: leaves fullscreen if needed, then asks the app to enter the system PiP window
-  function requestPip() {
-    const fs = document.fullscreenElement || document.webkitFullscreenElement;
-    try { if (fs) (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch (e) {}
-    setTimeout(() => {
-      try { window.YouTubeFreemiumBridge.enterPip(); } catch (e) {}
-    }, fs ? 650 : 60);
-  }
 
   function onSpeedTap(e) {
-    const onPip = pipBtnHit(e);
-    if (!onPip && !speedChipHit(e)) return;
+    if (!speedChipHit(e)) return;
     e.stopPropagation();
     e.preventDefault();
     if (e.type === 'click') return;
     const now = Date.now();
     if (now - lastSpeedTap < 350) return;
     lastSpeedTap = now;
-    if (onPip) { requestPip(); chipUntil = Date.now() + 3500; return; }
     const chip = document.getElementById('ytf-speed');
     const vid = findMainVideo();
     const next = RATES[(RATES.indexOf(savedRate()) + 1) % RATES.length] || 1;
@@ -923,11 +1036,11 @@
   }
   for (const ev of ['pointerup', 'touchend', 'click']) window.addEventListener(ev, onSpeedTap, true);
   for (const ev of ['pointerdown', 'touchstart', 'mousedown', 'mouseup']) {
-    window.addEventListener(ev, (e) => { if (speedChipHit(e) || pipBtnHit(e)) e.stopPropagation(); }, true);
+    window.addEventListener(ev, (e) => { if (speedChipHit(e)) e.stopPropagation(); }, true);
   }
 
   let chipUntil = Date.now() + 3500;
-  const bumpChip = () => { chipUntil = Date.now() + 3500; };
+  const bumpChip = () => { chipUntil = Date.now() + 3500; ensureSpeedChip(); };
   for (const ev of ['touchstart', 'pointerdown', 'click']) window.addEventListener(ev, bumpChip, true);
   document.addEventListener('play', bumpChip, true);
 
@@ -936,8 +1049,6 @@
     if (!/^\/watch/.test(location.pathname)) {
       const stale = document.getElementById('ytf-speed');
       if (stale) { stale.style.display = 'none'; stale.dataset.on = '0'; }
-      const staleBtn = document.getElementById('ytf-pipbtn');
-      if (staleBtn) { staleBtn.style.display = 'none'; staleBtn.dataset.on = '0'; }
       return;
     }
     if (location.host.includes('music.youtube.com')) return;
@@ -946,8 +1057,6 @@
     let chip = document.getElementById('ytf-speed');
     if (!player || inPip || adState.active) {
       if (chip) { chip.style.display = 'none'; chip.dataset.on = '0'; }
-      const pbOff = document.getElementById('ytf-pipbtn');
-      if (pbOff) { pbOff.style.display = 'none'; pbOff.dataset.on = '0'; }
       return;
     }
     if (!chip) {
@@ -966,243 +1075,72 @@
     chip.style.transition = 'opacity .25s';
     chip.style.opacity = show ? '1' : '0';
     chip.dataset.on = show ? '1' : '0';
-
-    let pb = document.getElementById('ytf-pipbtn');
-    if (!pb) {
-      pb = document.createElement('div');
-      pb.id = 'ytf-pipbtn';
-      pb.textContent = 'PiP';
-      pb.style.cssText = 'position:absolute;top:10px;z-index:2147483000;padding:6px 12px;border-radius:16px;' +
-        'background:rgba(0,0,0,.6);color:#fff;font:600 14px Roboto,Arial,sans-serif;cursor:pointer;' +
-        'user-select:none;-webkit-user-select:none;';
-    }
-    if (pb.parentElement !== player) player.appendChild(pb);
-    pb.style.left = (12 + chip.offsetWidth + 8) + 'px';
-    pb.style.display = '';
-    pb.style.transition = 'opacity .25s';
-    pb.style.opacity = show ? '1' : '0';
-    pb.dataset.on = show ? '1' : '0';
     const label = savedRate() + 'x';
     if (chip.textContent !== label) chip.textContent = label;
   }
 
-  // 9. Remove the "Open App" button / banners of the mobile site
-  function hideOpenApp() {
-    try {
-      if (!IS_TOP) return;
-      // returning from the mini player autoplays muted: switch the sound back on
-      const unmute = document.querySelector('[class*="unmute"]');
-      if (unmute && unmute.offsetParent !== null) {
-        const mv = findMainVideo();
-        if (mv && mv.muted && !adState.active) mv.muted = false;
-        if (typeof unmute.click === 'function') unmute.click();
-      }
-      const nodes = document.querySelectorAll('a, button, ytm-button-renderer, yt-button-shape');
-      for (const n of nodes) {
-        const t = (n.textContent || '').trim().toLowerCase();
-        if (t === 'open app' || t === 'open in app' || t === 'get the app') {
-          const host = n.closest('ytm-button-renderer, yt-button-shape') || n;
-          host.style.setProperty('display', 'none', 'important');
-        }
-      }
-    } catch (e) {}
-  }
+  // 9. Desktop compatibility stub & Mini mode helper
+  window.__ytf_miniOnBack = function () { return false; };
+  window.__ytf_setMini = function (on) { if (on) pipEnter(); else pipExit(); };
 
-
-  // 10. In-app mini player: Back during a video shrinks it to a floating player (like the YouTube app)
-  //     while you keep browsing. It is the official embed continued from the same second.
-  const mini = { active: false, id: '', t: 0, state: -1, duration: 0, title: '', since: 0, box: null, frame: null, saved: null };
-
-  // true while the mini player (not a watch-page video) is the thing that is playing
-  function miniFront() {
-    return mini.active && (!/^\/watch/.test(location.pathname) || Date.now() - mini.since < 2500);
-  }
-
-  function miniCmd(func, args) {
-    try {
-      mini.frame.contentWindow.postMessage(JSON.stringify({ event: 'command', func: func, args: args || [] }), '*');
-    } catch (e) {}
-  }
-
-  function closeMini() {
-    try {
-      if (mini.box) mini.box.remove();
-    } catch (e) {}
-    mini.active = false;
-    mini.box = null;
-    mini.frame = null;
-    mini.state = -1;
-    document.documentElement.style.removeProperty('--ytf-mini');
-    reportCurrentMediaState();
-  }
-
-  function openMini(id, t, playing, title) {
-    closeMini();
-    const box = document.createElement('div');
-    box.id = 'ytf-mini';
-    box.style.cssText = 'position:fixed;right:12px;bottom:84px;width:min(46vw,360px);aspect-ratio:16/9;background:#000;' +
-      'border-radius:12px;overflow:hidden;z-index:2147483600;box-shadow:0 6px 24px rgba(0,0,0,.6);';
-    const frame = document.createElement('iframe');
-    frame.src = 'https://www.youtube.com/embed/' + encodeURIComponent(id) + '?autoplay=' + (playing ? 1 : 0) +
-      '&start=' + t + '&playsinline=1&enablejsapi=1&rel=0&modestbranding=1&origin=' + encodeURIComponent(location.origin);
-    frame.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
-    frame.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;border:0;background:#000;';
-    const btn = (label, pos, fn) => {
-      const b = document.createElement('div');
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('viewBox', '0 0 24 24');
-      svg.setAttribute('width', '22');
-      svg.setAttribute('height', '22');
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('fill', '#fff');
-      path.setAttribute('d', label);
-      svg.appendChild(path);
-      b.appendChild(svg);
-      b.className = 'ytf-mini-btn';
-      b.style.cssText = 'position:absolute;top:8px;' + pos + ';width:36px;height:36px;border-radius:18px;background:rgba(0,0,0,.7);' +
-        'display:flex;align-items:center;justify-content:center;z-index:2;cursor:pointer;';
-      let last = 0;
-      for (const ev of ['click', 'touchend', 'pointerup']) {
-        b.addEventListener(ev, (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          const now = Date.now();
-          if (now - last < 500) return;
-          last = now;
-          fn();
-        }, true);
-      }
-      for (const ev of ['touchstart', 'pointerdown', 'mousedown']) {
-        b.addEventListener(ev, (e) => { e.stopPropagation(); }, true);
-      }
-      return b;
-    };
-    box.appendChild(frame);
-    box.appendChild(btn('M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z', 'left:8px', () => {
-      const target = '/watch?v=' + encodeURIComponent(mini.id) + '&t=' + Math.floor(mini.t) + 's';
-      closeMini();
-      location.assign(target);
-    }));
-    box.appendChild(btn('M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z', 'right:8px', () => { wantPlaying = false; closeMini(); }));
-    document.documentElement.appendChild(box);
-    Object.assign(mini, { active: true, id: id, t: t, state: playing ? 3 : 2, duration: 0, title: title || '', since: Date.now(), box: box, frame: frame });
-    wantPlaying = !!playing;
-    frame.addEventListener('load', () => {
-      try { frame.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*'); } catch (e) {}
-    });
-    reportCurrentMediaState();
-  }
-
-  window.addEventListener('message', (e) => {
-    if (!IS_TOP || !mini.active || !mini.frame || e.source !== mini.frame.contentWindow) return;
-    let d = e.data;
-    try { if (typeof d === 'string') d = JSON.parse(d); } catch (err) { return; }
-    if (!d) return;
-    if (DEBUG) ytfLog('mini msg ' + (d.event || '?') + ' ' + JSON.stringify(d.info === undefined ? '' : d.info).slice(0, 90));
-    if (d.event === 'onReady') {
-      try { mini.frame.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*'); } catch (err) {}
-    } else if (d.event === 'onStateChange' && typeof d.info === 'number') {
-      mini.state = d.info;
-    } else if (d.info && typeof d.info === 'object') {
-      const i = d.info;
-      if (typeof i.currentTime === 'number') mini.t = i.currentTime;
-      if (typeof i.playerState === 'number') mini.state = i.playerState;
-      if (typeof i.duration === 'number' && i.duration > 0) mini.duration = i.duration;
-      if (i.videoData && i.videoData.title) mini.title = i.videoData.title;
-    } else {
-      return;
-    }
-    // embeds sometimes sit at "unstarted/cued" with a big play button: start them if the user was watching
-    if ((mini.state === -1 || mini.state === 5) && wantPlaying && Date.now() - (mini.kick || 0) > 1200) {
-      mini.kick = Date.now();
-      miniCmd('playVideo');
-    }
-    reportCurrentMediaState();
-  }, false);
-
-  // Backgrounded (home, screen off) or PiP: turn the mini player into the real watch page,
-  // which keeps playing in the background and can use the native PiP window.
-  function restoreMiniToPage() {
-    if (!IS_TOP || !miniFront()) return false;
-    const playing = mini.state === 1 || mini.state === 3;
-    if (!playing) return false;
-    const id = mini.id;
-    const t = Math.floor(mini.t || 0);
-    closeMini();
-    wantPlaying = true;
-    try { sessionStorage.setItem('ytf_unmute', String(Date.now())); } catch (e) {}
-    location.assign('/watch?v=' + encodeURIComponent(id) + '&t=' + t + 's');
-    return true;
-  }
-
-  window.__ytf_miniOnBack = function () {
-    try {
-      if (!IS_TOP || location.host.includes('music.youtube.com') || !/^\/watch/.test(location.pathname)) return false;
-      const v = findMainVideo();
-      const id = videoIdOf(location.href);
-      if (DEBUG) ytfLog('miniOnBack v=' + !!v + ' id=' + id + ' ad=' + adState.active + ' fs=' + !!document.fullscreenElement + ' path=' + location.pathname + ' inPip=' + inPip + ' pipSaved=' + pipSaved.length);
-      if (!v || !id || adState.active || document.fullscreenElement) return false;
-      saveProgress(true);
-      try {
-        sessionStorage.setItem('ytf_mini_pending', JSON.stringify({ id: id, t: v.currentTime, playing: !v.paused, title: (document.title || '').replace(/\s*-\s*YouTube.*$/i, ''), at: Date.now() }));
-        setTimeout(() => { try { sessionStorage.removeItem('ytf_mini_pending'); } catch (e) {} }, 4000);
-      } catch (e) {}
-      openMini(id, Math.floor(v.currentTime), !v.paused, (document.title || '').replace(/\s*-\s*YouTube.*$/i, ''));
-      wantPlaying = !v.paused;
-      try { v.pause(); } catch (e) {}
-      if (history.length > 1) history.back(); else location.assign('/');
+  // YouTube Music player page back helper
+  window.__ytf_collapseMusicPlayer = function () {
+    var btn = document.querySelector('ytmusic-player-page button[aria-label*="lose"], ytmusic-player-page button.close-button, ytmusic-player-bar .chevron-down, button[aria-label="Close player page"], ytmusic-player-page [aria-label*="Back"]');
+    if (btn) {
+      btn.click();
       return true;
-    } catch (e) {
-      return false;
+    }
+    var layout = document.querySelector('ytmusic-app-layout[player-page-open]');
+    if (layout) {
+      layout.removeAttribute('player-page-open');
+      return true;
+    }
+    return false;
+  };
+
+  if (location.hostname.includes('music.youtube.com')) {
+    function checkMusicPlayer() {
+      var open = !!document.querySelector('ytmusic-app-layout[player-page-open], ytmusic-player-page[player-ui-state="PLAYER_PAGE_OPEN"], ytmusic-player-page[opened]');
+      if (window.YouTubeFreemiumBridge && typeof window.YouTubeFreemiumBridge.musicPlayerState === 'function') {
+        window.YouTubeFreemiumBridge.musicPlayerState(open);
+      }
+    }
+    try {
+      var musicObs = new MutationObserver(checkMusicPlayer);
+      musicObs.observe(document.documentElement, { attributes: true, subtree: true, attributeFilter: ['player-page-open', 'player-ui-state', 'opened'] });
+    } catch (e) {}
+  }
+
+  // Fullscreen helper for auto-rotate
+  window.__ytf_requestFullscreen = function () {
+    var btn = document.querySelector('button.fullscreen-icon, .ytp-fullscreen-button, button[aria-label*="ull screen"], button[aria-label*="ullscreen"]');
+    if (btn) {
+      btn.click();
+    } else {
+      var v = findMainVideo();
+      if (!v) v = document.querySelector('video');
+      if (v) {
+        if (v.requestFullscreen) v.requestFullscreen();
+        else if (v.webkitRequestFullscreen) v.webkitRequestFullscreen();
+      }
     }
   };
 
-  // History navigation after a page restore is a full page load: bring the mini player back on the new page.
-  setTimeout(() => {
-    if (!IS_TOP) return;
-    try {
-      const raw = sessionStorage.getItem('ytf_mini_pending');
-      if (!raw) return;
-      sessionStorage.removeItem('ytf_mini_pending');
-      const d = JSON.parse(raw);
-      if (!d || Date.now() - d.at > 15000 || /^\/watch/.test(location.pathname) || mini.active) return;
-      const t = Math.floor(d.t + (d.playing ? (Date.now() - d.at) / 1000 : 0));
-      openMini(d.id, t, !!d.playing, d.title);
-    } catch (e) {}
-  }, 500);
-
-  // a new watch page replaces the mini player
-  setInterval(() => {
-    if (mini.active && Date.now() - mini.since > 2500 && /^\/watch/.test(location.pathname) && findMainVideo()) closeMini();
-  }, 700);
-
-  // PiP with a mini player: show only that player, full window
-  function miniPip(entering) {
-    if (!mini.box) return;
-    if (entering) {
-      mini.saved = mini.box.getAttribute('style');
-      mini.box.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;width:100vw;height:100vh;background:#000;z-index:2147483600;';
-      for (const b of mini.box.querySelectorAll('.ytf-mini-btn')) b.style.display = 'none';
-      document.body.style.setProperty('display', 'none', 'important');
-    } else {
-      if (mini.saved) mini.box.setAttribute('style', mini.saved);
-      for (const b of mini.box.querySelectorAll('.ytf-mini-btn')) b.style.display = 'flex';
-      document.body.style.removeProperty('display');
-    }
-  }
-
   setInterval(() => {
     if (!IS_TOP) return;
     try {
-      if (inPip && !pipNative && !pipSaved.length && !miniFront() && findMainVideo() && /^\/watch/.test(location.pathname)) pipEnter();
-      const stamp = parseInt(sessionStorage.getItem('ytf_unmute') || '0', 10);
-      if (stamp) {
-        const v = findMainVideo();
-        if (Date.now() - stamp > 12000) sessionStorage.removeItem('ytf_unmute');
-        else if (v && v.muted && !adState.active) v.muted = false;
+      try {
+        if (window.YouTubeFreemiumBridge && typeof window.YouTubeFreemiumBridge.inPip === 'function') {
+          inPip = window.YouTubeFreemiumBridge.inPip();
+        }
+      } catch (e) {}
+      if (!inPip && (pipSaved.length > 0 || document.querySelector('[data-ytf-pip]'))) {
+        pipExit();
+      } else if (inPip && !pipNative && !pipSaved.length && findMainVideo() && /^\/watch/.test(location.pathname)) {
+        pipEnter();
       }
     } catch (e) {}
   }, 400);
-  setInterval(ensureSpeedChip, 300);
-  setInterval(hideOpenApp, 900);
+
+  setInterval(ensureSpeedChip, 1000);
 })();

@@ -33,10 +33,14 @@ import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Rect;
 import android.graphics.drawable.Icon;
+import android.hardware.SensorManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
+import android.provider.Settings;
 import android.util.Rational;
+import android.view.OrientationEventListener;
+import android.view.WindowManager;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import java.util.ArrayList;
@@ -82,11 +86,89 @@ public class MainActivity extends BridgeActivity {
 
     private boolean isMediaPlaying = false;
     private AdPill adPill;
+    private MediaBridge mediaBridge;
+    private PlayerHost player;
+    private OrientationEventListener orientationListener;
+    private boolean wasLandscape = false;
+
+    private boolean isAnyFullscreen() {
+        if (chrome != null && chrome.isFullscreen()) return true;
+        if (player != null && player.chrome() != null && player.chrome().isFullscreen()) return true;
+        return false;
+    }
+
+    private void hideAnyFullscreen() {
+        if (chrome != null && chrome.isFullscreen()) {
+            chrome.onHideCustomView();
+        }
+        if (player != null && player.chrome() != null && player.chrome().isFullscreen()) {
+            player.chrome().onHideCustomView();
+        }
+    }
+
+    private WebView mediaView() {
+        return player != null && player.state() != PlayerHost.State.HIDDEN && player.webView() != null
+                ? player.webView()
+                : (bridge != null ? bridge.getWebView() : null);
+    }
+
+    private void shareUrl(String url, String title) {
+        if (url == null || url.isEmpty()) return;
+        Intent sendIntent = new Intent(Intent.ACTION_SEND);
+        sendIntent.setType("text/plain");
+        sendIntent.putExtra(Intent.EXTRA_TEXT, url);
+        if (title != null && !title.isEmpty()) {
+            sendIntent.putExtra(Intent.EXTRA_SUBJECT, title);
+            sendIntent.putExtra(Intent.EXTRA_TITLE, title);
+        }
+        Intent chooser = Intent.createChooser(sendIntent, null);
+        try {
+            startActivity(chooser);
+        } catch (Exception e) {
+            Log.w("MainActivity", "Failed to start share chooser: " + e.getMessage());
+        }
+    }
+
+    private void applyBarAppearance(int color) {
+        boolean dark = (0.299 * Color.red(color) + 0.587 * Color.green(color) + 0.114 * Color.blue(color)) < 128;
+        WindowInsetsControllerCompat c = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        c.setAppearanceLightStatusBars(!dark);
+        c.setAppearanceLightNavigationBars(!dark);
+    }
+
+    private void updateThemeColor(String colorStr) {
+        if (cfg == null || cfg.tv || colorStr == null || colorStr.isEmpty()) return;
+        try {
+            int color;
+            if (colorStr.startsWith("#")) {
+                color = Color.parseColor(colorStr);
+            } else if (colorStr.startsWith("rgb")) {
+                String nums = colorStr.substring(colorStr.indexOf('(') + 1, colorStr.indexOf(')'));
+                String[] parts = nums.split(",");
+                int r = Integer.parseInt(parts[0].trim());
+                int g = Integer.parseInt(parts[1].trim());
+                int b = Integer.parseInt(parts[2].trim());
+                color = Color.rgb(r, g, b);
+            } else {
+                return;
+            }
+            applyBarAppearance(color);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private boolean isAutoRotateEnabled() {
+        try {
+            return Settings.System.getInt(getContentResolver(), Settings.System.ACCELEROMETER_ROTATION, 0) == 1;
+        } catch (Exception e) {
+            return false;
+        }
+    }
 
     /** The in-player PiP button: leave native fullscreen if needed, then go straight to the PiP window. */
     private void enterPipFromButton() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !hasPipSupport()) return;
-        if (chrome != null && chrome.isFullscreen()) chrome.onHideCustomView();
+        if (isAnyFullscreen()) hideAnyFullscreen();
         getWindow().getDecorView().postDelayed(() -> {
             try {
                 PictureInPictureParams.Builder b = buildPipParams();
@@ -151,18 +233,25 @@ public class MainActivity extends BridgeActivity {
             if (intent == null) return;
             String action = intent.getAction();
             if (Intent.ACTION_SCREEN_OFF.equals(action)) {
-                if (prefs.backgroundPlayEnabled() && bridge != null && bridge.getWebView() != null) {
+                if (prefs.backgroundPlayEnabled()) {
                     evalJs("window.__ytf_setBg&&window.__ytf_setBg(true)");
                     keepWebViewVisible();
-                    for (long delay : new long[]{300, 1000, 2500}) {
-                        bridge.getWebView().postDelayed(() ->
-                                evalJs("window.__ytf_resumeIfWanted&&window.__ytf_resumeIfWanted()"), delay);
+                    WebView mv = mediaView();
+                    if (mv != null) {
+                        for (long delay : new long[]{300, 1000, 2500}) {
+                            mv.postDelayed(() ->
+                                    evalJs("window.__ytf_resumeIfWanted&&window.__ytf_resumeIfWanted()"), delay);
+                        }
                     }
                 }
             } else if (Intent.ACTION_SCREEN_ON.equals(action) || Intent.ACTION_USER_PRESENT.equals(action)) {
                 if (bridge != null && bridge.getWebView() != null) {
                     bridge.getWebView().onResume();
                     bridge.getWebView().resumeTimers();
+                }
+                if (player != null && player.webView() != null) {
+                    player.webView().onResume();
+                    player.webView().resumeTimers();
                 }
             }
         }
@@ -198,7 +287,11 @@ public class MainActivity extends BridgeActivity {
                 applyHosts(config);
                 reloadTvProfile();
             }
-            @Override public void onActiveSourceChanged(Source active) { }
+            @Override public void onActiveSourceChanged(Source active) {
+                if (active == null || !"youtube".equals(active.id)) {
+                    if (player != null) player.close();
+                }
+            }
         });
         RemoteApplier applier = new RemoteApplier(defaults, repo::config, repo::update, prefs::setLastGoodRemote,
                 line -> Log.i("MovyRemote", line));
@@ -259,9 +352,95 @@ public class MainActivity extends BridgeActivity {
     protected void load() {
         super.load();
         WebView wv = bridge.getWebView();
+        wv.setOverScrollMode(View.OVER_SCROLL_NEVER);
         configureSettings(wv);
-        final MediaBridge mediaBridge = new MediaBridge((isPlaying, isVideo, title, artist, artworkUrl, duration, position, width, height, left, top, right, bottom) -> {
+        if (cfg.debug) WebView.setWebContentsDebuggingEnabled(true);
+        if (!cfg.tv) {
+            player = new PlayerHost(this, bridge, cfg, rules, stats, new PlayerHost.Host() {
+                @Override public void configureSettings(WebView pwv) {
+                    MainActivity.this.configureSettings(pwv);
+                }
+                @Override public void onPlayerStateChanged(PlayerHost.State state) {
+                    if (state == PlayerHost.State.HIDDEN) {
+                        if (!isAnyFullscreen()) applyRestOrientation();
+                    }
+                }
+                @Override public void onOpenBrowse(String url) {
+                    if (player != null) player.minimize();
+                    bridge.getWebView().loadUrl(url);
+                }
+                @Override public void onShare(String url, String title) {
+                    shareUrl(url, title);
+                }
+                @Override public void onThemeColor(String color) {
+                    updateThemeColor(color);
+                }
+                @Override public void onMediaState(boolean isPlaying, boolean isVideo, String title, String artist,
+                                                  String artworkUrl, double duration, double position,
+                                                  int width, int height, int left, int top, int right, int bottom) {
+                    onMediaStateUpdated(isPlaying, isVideo, title, artist, artworkUrl, duration, position, width, height, left, top, right, bottom);
+                }
+                @Override public void onAdSkipping(boolean on) {
+                    if (on && !isInPictureInPictureMode()) adPill.show(); else adPill.hide();
+                }
+                @Override public void onEnterPip() {
+                    enterPipFromButton();
+                }
+            });
+            orientationListener = new OrientationEventListener(this, SensorManager.SENSOR_DELAY_NORMAL) {
+                @Override
+                public void onOrientationChanged(int orientation) {
+                    if (orientation == OrientationEventListener.ORIENTATION_UNKNOWN) return;
+                    if (cfg == null || cfg.tv || !isAutoRotateEnabled()) return;
+                    boolean phone = OrientationPolicy.isPhone(getResources().getConfiguration().smallestScreenWidthDp);
+                    if (!phone) return;
+
+                    boolean landscape = OrientationPolicy.isLandscape(orientation);
+                    boolean portrait = OrientationPolicy.isPortrait(orientation);
+
+                    if (landscape && !wasLandscape) {
+                        wasLandscape = true;
+                        if (player != null && player.state() == PlayerHost.State.FULL && isMediaPlaying && isVideoMedia && !isAnyFullscreen()) {
+                            injectGestureKey(player.webView());
+                            if (player.webView() != null) {
+                                player.webView().evaluateJavascript("window.__ytf_requestFullscreen ? window.__ytf_requestFullscreen() : (function(){var b=document.querySelector('button.fullscreen-icon,.ytp-fullscreen-button,button[aria-label*=\"ull screen\"]');if(b)b.click();})()", null);
+                            }
+                        }
+                    } else if (portrait && wasLandscape) {
+                        wasLandscape = false;
+                        if (isAnyFullscreen()) {
+                            hideAnyFullscreen();
+                        }
+                    }
+                }
+            };
+            if (orientationListener.canDetectOrientation()) {
+                orientationListener.enable();
+            }
+        }
+        mediaBridge = new MediaBridge("browse", (isPlaying, isVideo, title, artist, artworkUrl, duration, position, width, height, left, top, right, bottom) -> {
+            if (player != null && player.state() != PlayerHost.State.HIDDEN) return;
             runOnUiThread(() -> onMediaStateUpdated(isPlaying, isVideo, title, artist, artworkUrl, duration, position, width, height, left, top, right, bottom));
+        }, new MediaBridge.Host() {
+            @Override public void openVideo(String url) {
+                runOnUiThread(() -> {
+                    if (player != null) player.open(url);
+                });
+            }
+            @Override public void openBrowse(String url) {
+                runOnUiThread(() -> wv.loadUrl(url));
+            }
+            @Override public void minimize() {
+                runOnUiThread(() -> {
+                    if (player != null) player.minimize();
+                });
+            }
+            @Override public void share(String url, String title) {
+                runOnUiThread(() -> shareUrl(url, title));
+            }
+            @Override public void themeColor(String color) {
+                runOnUiThread(() -> updateThemeColor(color));
+            }
         });
         adPill = new AdPill(this);
         mediaBridge.setAdListener(on -> runOnUiThread(() -> { if (on && !isInPictureInPictureMode()) adPill.show(); else adPill.hide(); }));
@@ -302,6 +481,20 @@ public class MainActivity extends BridgeActivity {
                 pageUrl = url;
                 repo.rememberUrl(url);
                 island.onUrl(url);
+                if (!cfg.tv && BackPolicy.isWatch(url)) {
+                    Source a = repo.active();
+                    if (a == null || "youtube".equals(a.id)) {
+                        if (player != null) player.open(url);
+                        if (wv.canGoBack()) {
+                            wv.goBack();
+                        } else {
+                            if (a != null) wv.loadUrl(a.url);
+                        }
+                    }
+                }
+                if (url != null && url.contains("/shorts/")) {
+                    if (player != null) player.close();
+                }
             }
             @Override public void onPageStarted(String url) {
                 if (url != null) pageUrl = url;
@@ -352,7 +545,7 @@ public class MainActivity extends BridgeActivity {
         content.setBackgroundColor(bg);
         ViewCompat.setOnApplyWindowInsetsListener(content, (v, insets) -> {
             if (cfg.tv && insets.isVisible(WindowInsetsCompat.Type.systemBars())) v.post(this::applyImmersive);
-            if (chrome != null && chrome.isFullscreen()) {
+            if (isAnyFullscreen()) {
                 v.setPadding(0, 0, 0, 0);
             } else {
                 Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
@@ -361,10 +554,7 @@ public class MainActivity extends BridgeActivity {
             }
             return WindowInsetsCompat.CONSUMED;
         });
-        boolean dark = (0.299 * Color.red(bg) + 0.587 * Color.green(bg) + 0.114 * Color.blue(bg)) < 128;
-        WindowInsetsControllerCompat c = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
-        c.setAppearanceLightStatusBars(!dark);
-        c.setAppearanceLightNavigationBars(!dark);
+        applyBarAppearance(bg);
         if (cfg.tv) applyImmersive();
         ViewCompat.requestApplyInsets(content);
     }
@@ -388,6 +578,13 @@ public class MainActivity extends BridgeActivity {
         if (bridge != null && bridge.getWebView() != null) {
             bridge.getWebView().onResume();
             bridge.getWebView().resumeTimers();
+        }
+        if (player != null && player.webView() != null) {
+            player.webView().onResume();
+            player.webView().resumeTimers();
+        }
+        if (orientationListener != null && orientationListener.canDetectOrientation()) {
+            orientationListener.enable();
         }
         applyImmersive();
     }
@@ -438,15 +635,16 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onConfigurationChanged(android.content.res.Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        if (chrome == null || !chrome.isFullscreen()) applyRestOrientation();
+        if (!isAnyFullscreen()) applyRestOrientation();
         if (chrome != null) chrome.onConfigurationChanged();
+        if (player != null && player.chrome() != null) player.chrome().onConfigurationChanged();
     }
 
     /** TV: the remote's keys are routed by {@link TvController} before the page sees them. */
     @Override
     public boolean dispatchKeyEvent(KeyEvent e) {
         if (cfg.tv && e.getKeyCode() == KeyEvent.KEYCODE_BACK && e.getAction() == KeyEvent.ACTION_DOWN
-                && chrome != null && chrome.isFullscreen() && !(tvIdle != null && tvIdle.isIdle())) noteUserLeftFullscreen();
+                && isAnyFullscreen() && !(tvIdle != null && tvIdle.isIdle())) noteUserLeftFullscreen();
         if (tvIdle != null && tvIdle.onKey(e)) return true; // first key after idle only wakes the screen
         if (tvKeys != null && tvKeys.dispatch(e)) return true;
         if (tvKeys != null && tvKeys.trapPanelKeys(e)) return true;
@@ -463,7 +661,7 @@ public class MainActivity extends BridgeActivity {
                 return (settings != null && settings.isOpen()) || launch.isChooserShowing()
                         || launch.errorPanel().isShowing() || island.isExpanded();
             }
-            @Override public boolean isFullscreen() { return chrome != null && chrome.isFullscreen(); }
+            @Override public boolean isFullscreen() { return isAnyFullscreen(); }
             @Override public void toggleIsland() {
                 if (tvHint != null) tvHint.dismiss();
                 if (settings != null && settings.isOpen()) return;
@@ -492,7 +690,7 @@ public class MainActivity extends BridgeActivity {
         bridge.getWebView().addJavascriptInterface(new TvBridge(repo::config, repo::active, () -> pageUrl,
                 () -> runOnUiThread(() -> {
                     if (tvKeys == null || island.isExpanded() || launch.isChooserShowing()
-                            || (settings != null && settings.isOpen()) || (chrome != null && chrome.isFullscreen())) return;
+                            || (settings != null && settings.isOpen()) || isAnyFullscreen()) return;
                     if (tvHint != null) tvHint.dismiss();
                     island.menuToggle();
                 }),
@@ -539,11 +737,15 @@ public class MainActivity extends BridgeActivity {
     }
 
     /** A real input event grants the page transient user activation (needed for requestFullscreen after a route change). */
-    private void injectGestureKey() {
-        WebView wv = bridge.getWebView();
+    private void injectGestureKey(WebView wv) {
+        if (wv == null) return;
         long t = SystemClock.uptimeMillis();
         wv.dispatchKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_F1, 0));
         wv.dispatchKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_F1, 0));
+    }
+
+    private void injectGestureKey() {
+        injectGestureKey(mediaView());
     }
 
     private boolean dispatchToPage(KeyEvent e) {
@@ -552,6 +754,9 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onPause() {
+        if (orientationListener != null) {
+            orientationListener.disable();
+        }
         StorageManager.flushCookies();
         snapshotCookies();
         if (!isInPictureInPictureMode() && prefs.backgroundPlayEnabled()) {
@@ -561,6 +766,10 @@ public class MainActivity extends BridgeActivity {
         if (bridge != null && bridge.getWebView() != null && (isMediaPlaying || prefs.backgroundPlayEnabled())) {
             bridge.getWebView().onResume();
             bridge.getWebView().resumeTimers();
+        }
+        if (player != null && player.webView() != null && (isMediaPlaying || prefs.backgroundPlayEnabled())) {
+            player.webView().onResume();
+            player.webView().resumeTimers();
         }
     }
 
@@ -586,9 +795,15 @@ public class MainActivity extends BridgeActivity {
         StorageManager.flushCookies();
         snapshotCookies();
         super.onStop();
-        if (bridge != null && bridge.getWebView() != null && (isMediaPlaying || prefs.backgroundPlayEnabled())) {
-            bridge.getWebView().onResume();
-            bridge.getWebView().resumeTimers();
+        if ((isMediaPlaying || prefs.backgroundPlayEnabled())) {
+            if (bridge != null && bridge.getWebView() != null) {
+                bridge.getWebView().onResume();
+                bridge.getWebView().resumeTimers();
+            }
+            if (player != null && player.webView() != null) {
+                player.webView().onResume();
+                player.webView().resumeTimers();
+            }
         }
         if (prefs.backgroundPlayEnabled()) {
             evalJs("window.__ytf_setBg&&window.__ytf_setBg(true)");
@@ -613,12 +828,18 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onDestroy() {
+        if (orientationListener != null) {
+            orientationListener.disable();
+        }
         try { unregisterReceiver(pipReceiver); } catch (Exception ignored) {}
         try { unregisterReceiver(screenReceiver); } catch (Exception ignored) {}
         if (serviceBound) {
             unbindService(serviceConn);
             serviceBound = false;
             serviceRequested = false;
+        }
+        if (player != null) {
+            player.close();
         }
         if (lifecycle != null) lifecycle.onDestroy();
         super.onDestroy();
@@ -642,7 +863,22 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode, Configuration newConfig) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
-        if (isInPictureInPictureMode) evalJs("window.__ytf_setBg&&window.__ytf_setBg(false)");
+        // Keep the bridge's volatile flag in sync BEFORE the JS call so inPip() is accurate immediately.
+        if (mediaBridge != null) mediaBridge.setPipActive(isInPictureInPictureMode);
+        if (player != null) player.setPipActive(isInPictureInPictureMode);
+        if (isInPictureInPictureMode) {
+            evalJs("window.__ytf_setBg&&window.__ytf_setBg(false)");
+            if (player != null && player.state() == PlayerHost.State.MINI) {
+                player.expand();
+            }
+            if (bridge != null && bridge.getWebView() != null) {
+                bridge.getWebView().setVisibility(View.INVISIBLE);
+            }
+        } else {
+            if (bridge != null && bridge.getWebView() != null) {
+                bridge.getWebView().setVisibility(View.VISIBLE);
+            }
+        }
         if (isInPictureInPictureMode && adPill != null) adPill.hide();
         if (island != null) island.setPipMode(isInPictureInPictureMode);
         evalJs("window.__ytf_setPip&&window.__ytf_setPip(" + isInPictureInPictureMode + ")");
@@ -650,8 +886,9 @@ public class MainActivity extends BridgeActivity {
 
     private void evalJs(String js) {
         runOnUiThread(() -> {
-            if (bridge != null && bridge.getWebView() != null) {
-                bridge.getWebView().evaluateJavascript(js, null);
+            WebView v = mediaView();
+            if (v != null) {
+                v.evaluateJavascript(js, null);
             }
         });
     }
@@ -723,6 +960,13 @@ public class MainActivity extends BridgeActivity {
         this.mediaHeight = height > 0 ? height : 9;
         this.mediaRect.set(left, top, right, bottom);
 
+        // Phase 3 item 1: Screen never sleeps during a video
+        if (isPlaying && isVideo) {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        } else {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        }
+
         updatePipParams();
 
         if ((isPlaying && prefs.backgroundPlayEnabled()) || serviceBound || serviceRequested) {
@@ -753,7 +997,12 @@ public class MainActivity extends BridgeActivity {
         if (host.contains("music.youtube.com")) {
             repo.openUrl("youtube-music", url);
         } else if (host.contains("youtube.com") || host.contains("youtu.be")) {
-            repo.openUrl("youtube", url);
+            if (!cfg.tv && BackPolicy.isWatch(url)) {
+                repo.openUrl("youtube", repo.active() != null && "youtube".equals(repo.active().id) ? repo.lastUrl(repo.active()) : "https://m.youtube.com");
+                if (player != null) player.open(url);
+            } else {
+                repo.openUrl("youtube", url);
+            }
         }
     }
 
@@ -812,16 +1061,59 @@ public class MainActivity extends BridgeActivity {
         }
         if (launch.isChooserShowing()) {
             leaveApp();
-        } else if (chrome != null && chrome.isFullscreen()) {
+            return;
+        }
+
+        if (isAnyFullscreen()) {
             lastUserFsExitMs = SystemClock.elapsedRealtime();
             if (cfg.tv) wv.evaluateJavascript("window.__movyTv&&window.__movyTv.userExitFs&&window.__movyTv.userExitFs()", null);
-            chrome.onHideCustomView();
-        } else if (!cfg.tv) {
-            wv.evaluateJavascript("(window.__ytf_miniOnBack&&window.__ytf_miniOnBack())===true", value -> {
-                if (!"true".equals(value)) backDefault(wv);
-            });
-        } else {
+            hideAnyFullscreen();
+            return;
+        }
+
+        if (cfg.tv) {
             backDefault(wv);
+            return;
+        }
+
+        // YouTube Music: close full-screen player first if open
+        Source active = repo.active();
+        if (active != null && "youtube-music".equals(active.id)) {
+            if (mediaBridge != null && mediaBridge.isMusicPlayerOpen()) {
+                wv.evaluateJavascript("window.__ytf_collapseMusicPlayer&&window.__ytf_collapseMusicPlayer()", null);
+                return;
+            }
+        }
+
+        // Phone dual-WebView BackPolicy action
+        PlayerHost.State pState = player != null ? player.state() : PlayerHost.State.HIDDEN;
+        BackPolicy.Action action = BackPolicy.action(false, pState, wv.canGoBack());
+
+        switch (action) {
+            case MINIMIZE_PLAYER:
+                if (player != null) player.minimize();
+                break;
+            case BROWSE_BACK:
+                android.webkit.WebBackForwardList h = wv.copyBackForwardList();
+                java.util.List<String> urls = new java.util.ArrayList<>();
+                for (int i = 0; i < h.getSize(); i++) urls.add(h.getItemAtIndex(i).getUrl());
+                int d = BackPolicy.decide(urls, h.getCurrentIndex());
+                if (d < 0) {
+                    wv.goBackOrForward(d);
+                } else if (d == BackPolicy.HOME) {
+                    if (active != null) repo.openUrl(active.id, active.url);
+                    else finish();
+                } else {
+                    wv.goBack();
+                }
+                break;
+            case MOVE_TASK_TO_BACK:
+                moveTaskToBack(true);
+                break;
+            case FINISH:
+            default:
+                finish();
+                break;
         }
     }
 

@@ -25,4 +25,26 @@ public class OrientationPolicyTest {
         assertFalse(OrientationPolicy.isPhone(600));
         assertFalse(OrientationPolicy.isPhone(800));
     }
+
+    @Test public void fromDegrees_classifiesAnglesCorrectly() {
+        assertEquals(OrientationPolicy.DeviceOrientation.PORTRAIT, OrientationPolicy.fromDegrees(0));
+        assertEquals(OrientationPolicy.DeviceOrientation.PORTRAIT, OrientationPolicy.fromDegrees(20));
+        assertEquals(OrientationPolicy.DeviceOrientation.PORTRAIT, OrientationPolicy.fromDegrees(350));
+
+        assertEquals(OrientationPolicy.DeviceOrientation.REVERSE_LANDSCAPE, OrientationPolicy.fromDegrees(90));
+        assertEquals(OrientationPolicy.DeviceOrientation.REVERSE_PORTRAIT, OrientationPolicy.fromDegrees(180));
+        assertEquals(OrientationPolicy.DeviceOrientation.LANDSCAPE, OrientationPolicy.fromDegrees(270));
+
+        assertEquals(OrientationPolicy.DeviceOrientation.UNKNOWN, OrientationPolicy.fromDegrees(-1));
+    }
+
+    @Test public void isLandscapeAndPortrait() {
+        assertTrue(OrientationPolicy.isLandscape(90));
+        assertTrue(OrientationPolicy.isLandscape(270));
+        assertFalse(OrientationPolicy.isLandscape(0));
+
+        assertTrue(OrientationPolicy.isPortrait(0));
+        assertTrue(OrientationPolicy.isPortrait(180));
+        assertFalse(OrientationPolicy.isPortrait(270));
+    }
 }

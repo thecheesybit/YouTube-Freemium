@@ -193,14 +193,7 @@
   }
 
   function onClickNonAnchor(ev) {
-    if (redispatching || !ev.target || ev.target.nodeType !== 1 || anchorOf(ev.target)) return;
-    var el = ev.target;
-    if (el === document.body || el === document.documentElement) return;
-    if (!isInvisibleOverlay(el, false)) return;
-    swallow(ev);
-    report('navigation', 'overlay');
-    el.parentNode && el.parentNode.removeChild(el);
-    resend(ev, el);
+    return;
   }
 
   ['click', 'auxclick', 'pointerup'].forEach(function (t) {

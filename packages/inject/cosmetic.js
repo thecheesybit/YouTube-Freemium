@@ -56,7 +56,15 @@ if (bridge && (proto === 'http:' || proto === 'https:') && !window.__movyCosmeti
     if (res.hide_selectors && res.hide_selectors.length) hideRule(res.hide_selectors);
 
     if (res.injected_script) {
-      try { (typeof MOVY_EVAL === 'function' ? MOVY_EVAL : eval)(res.injected_script); } catch (e) { /* blocked by page CSP or scriptlet error */ }
+      try {
+        var code = res.injected_script;
+        try {
+          if (window.trustedTypes && trustedTypes.createPolicy) {
+            code = trustedTypes.createPolicy('movy-scriptlets', { createScript: function (s) { return s; } }).createScript(code);
+          }
+        } catch (e) {}
+        (typeof MOVY_EVAL === 'function' ? MOVY_EVAL : eval)(code);
+      } catch (e) { /* blocked by page CSP or scriptlet error */ }
     }
 
     if (!res.generichide) {
