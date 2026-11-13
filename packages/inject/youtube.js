@@ -278,11 +278,17 @@
     css += ' body { -webkit-user-select: none !important; -webkit-touch-callout: none !important; }';
     css += ' input, textarea { -webkit-user-select: text !important; }';
     if (IS_PHONE_SPLIT && ROLE === 'player') {
-      css += ' ytm-mobile-topbar-renderer, ytm-pivot-bar-renderer { display: none !important; }';
+      // The top bar's backdrop sits outside the bar; it showed as a dark 48px strip while the player was empty between videos.
+      css += ' ytm-mobile-topbar-renderer, .mobile-topbar-header-background, ytm-pivot-bar-renderer { display: none !important; }';
+      // Ambient mode makes the 16:9 placeholder transparent, so switching videos showed a white page; keep it black like the app.
+      css += ' ytm-watch .player-placeholder { background-color: #000 !important; }';
       css += ' #player-container-id { top: 0 !important; }';
       css += ' body, ytm-app, #app, ytm-watch { padding-top: 0 !important; margin-top: 0 !important; }';
-      // YouTube pins the "All / For you" row at offsets that include the hidden 48px top bar; pin it right under the video (full width, 16:9).
-      css += ' ytm-related-chip-cloud-renderer, ytm-related-chip-cloud-renderer.chips-visible { top: 56.25vw !important; }';
+      // YouTube's own offsets below the video include the hidden 48px top bar: take it off. The chip row keeps
+      // YouTube's translateY(-48px) slide-in (top 56.25vw+96px upstream), so it lands at 56.25vw, the player's bottom edge.
+      css += ' ytm-related-chip-cloud-renderer { top: calc(56.25vw + 48px) !important; }';
+      // Description and comments sheet (upstream: calc(56.25vw + 48px)).
+      css += ' ytm-engagement-panel { top: 56.25vw !important; }';
     }
     style.textContent = css;
     (document.head || document.documentElement).appendChild(style);
@@ -306,7 +312,9 @@
   function reportThemeColor() {
     try {
       if (document.body && window.YouTubeFreemiumBridge && window.YouTubeFreemiumBridge.themeColor) {
-        const bg = getComputedStyle(document.body).backgroundColor;
+        // m.youtube.com paints <html>, not <body> (body reports transparent, which read as black).
+        let bg = getComputedStyle(document.body).backgroundColor;
+        if (!bg || /^rgba\(.*,\s*0\)$/.test(bg) || bg === 'transparent') bg = getComputedStyle(document.documentElement).backgroundColor;
         if (bg) window.YouTubeFreemiumBridge.themeColor(bg);
       }
     } catch (e) {}
