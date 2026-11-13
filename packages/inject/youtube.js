@@ -5,9 +5,13 @@
   const DEBUG = false;
   const IS_TOP = window.top === window;
 
-  let ROLE = 'browse';
+  // '' = the host has no phone bridge role (desktop). Defaulting to 'browse' made desktop and TV take the phone-only paths
+  // (watch-link clicks swallowed, /watch videos paused). The TV shell reports role 'tv'.
+  let ROLE = '';
   try { if (window.YouTubeFreemiumBridge && window.YouTubeFreemiumBridge.role) ROLE = window.YouTubeFreemiumBridge.role(); } catch (e) {}
   const IS_PHONE_SPLIT = (ROLE === 'browse' || ROLE === 'player') && !location.host.includes('music.youtube.com');
+  // The floating in-page mini player (embed iframe) belongs to desktop, TV and YouTube Music; the phone has the native one.
+  const WEB_MINI = !IS_PHONE_SPLIT;
 
   // A. No "Are you sure you want to leave this page?" prompt when switching apps/sources
   try {
@@ -686,6 +690,21 @@
       const bridge = window.YouTubeFreemiumBridge;
       if (!bridge) return;
 
+      if (miniFront() && mini.box) {
+        const r = mini.box.getBoundingClientRect();
+        const playingMini = mini.state === 1 || mini.state === 3;
+        const sigM = ['m', playingMini, mini.id, mini.title].join('|');
+        const nowM = Date.now();
+        if (sigM === lastSig && nowM - lastSentAt < 5000) return;
+        lastSig = sigM;
+        lastSentAt = nowM;
+        if (DEBUG) ytfLog('report mini playing=' + playingMini + ' state=' + mini.state + ' t=' + (mini.t | 0));
+        bridge.reportMediaState(playingMini, true, mini.title || 'YouTube', 'YouTube',
+          'https://i.ytimg.com/vi/' + mini.id + '/hqdefault.jpg', mini.duration || 0, mini.t || 0, 16, 9,
+          Math.max(0, Math.round(r.left)), Math.max(0, Math.round(r.top)), Math.max(0, Math.round(r.right)), Math.max(0, Math.round(r.bottom)));
+        return;
+      }
+
       const playing = video ? !video.paused && !video.ended : false;
       const isMusicHost = location.host.includes('music.youtube.com');
       const isVideo = video ? (video.videoWidth > 0 && !isMusicHost) : false;
@@ -754,6 +773,7 @@
   // 5. PiP: show ONLY the video. Every sibling along the video's ancestor chain is hidden and the
   //    chain is stretched to the viewport, so nothing else of the page appears in the small window.
   let inPip = false;
+  if (WEB_MINI) { try { inPip = sessionStorage.getItem('ytf_inpip') === '1'; } catch (e) {} } // survives the page load the mini player causes
   let pipSaved = [];
 
   // PiP isolation uses attributes + one stylesheet (not inline styles), so leaving PiP just removes
@@ -815,12 +835,15 @@
   }
 
   // `native` (desktop): the host opens the browser's own PiP window for the video, so the page is never restyled.
-  // Only the PiP flag and the resume guards apply. Returns 'ok' when native is true.
+  // Only the PiP flag, the resume guards and the mini-player conversion apply. Returns 'mini' when the mini player
+  // was turned into the real watch page (the host retries once that page has a video), else 'ok'.
   let pipNative = false;
   window.__ytf_setPip = function (entering, native) {
-    if (DEBUG) ytfLog('setPip ' + entering + ' native=' + !!native + ' fs=' + !!(document.fullscreenElement || document.webkitFullscreenElement) + ' path=' + location.pathname + ' video=' + !!findMainVideo());
+    if (DEBUG) ytfLog('setPip ' + entering + ' native=' + !!native + ' fs=' + !!(document.fullscreenElement || document.webkitFullscreenElement) + ' path=' + location.pathname + ' video=' + !!findMainVideo() + ' mini=' + mini.active);
     inPip = !!entering;
     pipNative = !!native && !!entering;
+    if (!native) { try { sessionStorage.setItem('ytf_inpip', entering ? '1' : '0'); } catch (e) {} }
+    if (entering && restoreMiniToPage()) return native ? 'mini' : undefined;
     if (native) {
       nativeGraceUntil = Date.now() + 4000;
       setTimeout(window.__ytf_resumeIfWanted, 400);
@@ -831,7 +854,8 @@
     setTimeout(window.__ytf_resumeIfWanted, 400);
     setTimeout(window.__ytf_resumeIfWanted, 1500);
     try {
-      if (entering) pipEnter(); else pipExit();
+      if (miniFront() || (!entering && mini.active && mini.box && mini.box.style.width === '100vw')) miniPip(!!entering);
+      else if (entering) pipEnter(); else pipExit();
     } catch (e) {}
   };
 
@@ -840,7 +864,7 @@
     try {
       wantPlaying = true;
       const v = findMainVideo();
-      if (v) v.play();
+      if (miniFront()) miniCmd('playVideo'); else if (v) v.play();
     } catch (e) {}
   };
 
@@ -848,7 +872,7 @@
     try {
       wantPlaying = false;
       const v = findMainVideo();
-      if (v) v.pause();
+      if (miniFront()) miniCmd('pauseVideo'); else if (v) v.pause();
     } catch (e) {}
   };
 
@@ -896,7 +920,11 @@
 
   window.__ytf_setBg = function (bg) {
     window.__ytf_bg = !!bg;
+    try {
+      if (IS_TOP && mini.active && mini.frame) mini.frame.contentWindow.postMessage(JSON.stringify({ ytf: 'bg', v: !!bg }), '*');
+    } catch (e) {}
     nativeGraceUntil = Date.now() + 4000;
+    if (bg && restoreMiniToPage()) return;
     if (bgTimer) { clearInterval(bgTimer); bgTimer = null; }
     if (bg) {
       window.__ytf_resumeIfWanted();
@@ -919,7 +947,9 @@
   window.__ytf_resumeIfWanted = function () {
     try {
       const v = findMainVideo();
-      if (wantPlaying && v && v.paused && !v.ended) v.play().catch(() => {});
+      if (miniFront()) {
+        if (wantPlaying && (mini.state === 2 || window.__ytf_bg)) miniCmd('playVideo');
+      } else if (wantPlaying && v && v.paused && !v.ended) v.play().catch(() => {});
     } catch (e) {}
   };
 
@@ -1089,8 +1119,190 @@
     if (chip.textContent !== label) chip.textContent = label;
   }
 
-  // 9. Desktop compatibility stub & Mini mode helper
-  window.__ytf_miniOnBack = function () { return false; };
+  // 9. In-page mini player (desktop, TV, YouTube Music; restored from upstream): Back during a video shrinks it to a
+  //    floating player while you keep browsing. It is the official embed continued from the same second.
+  //    Never active on the phone (WEB_MINI false): there Back docks the native mini bar instead (PlayerHost).
+  const mini = { active: false, id: '', t: 0, state: -1, duration: 0, title: '', since: 0, box: null, frame: null, saved: null };
+
+  // true while the mini player (not a watch-page video) is the thing that is playing
+  function miniFront() {
+    return WEB_MINI && mini.active && (!/^\/watch/.test(location.pathname) || Date.now() - mini.since < 2500);
+  }
+
+  function miniCmd(func, args) {
+    try {
+      mini.frame.contentWindow.postMessage(JSON.stringify({ event: 'command', func: func, args: args || [] }), '*');
+    } catch (e) {}
+  }
+
+  function closeMini() {
+    try {
+      if (mini.box) mini.box.remove();
+    } catch (e) {}
+    mini.active = false;
+    mini.box = null;
+    mini.frame = null;
+    mini.state = -1;
+    document.documentElement.style.removeProperty('--ytf-mini');
+    reportCurrentMediaState();
+  }
+
+  function openMini(id, t, playing, title) {
+    closeMini();
+    const box = document.createElement('div');
+    box.id = 'ytf-mini';
+    box.style.cssText = 'position:fixed;right:12px;bottom:84px;width:min(46vw,360px);aspect-ratio:16/9;background:#000;' +
+      'border-radius:12px;overflow:hidden;z-index:2147483600;box-shadow:0 6px 24px rgba(0,0,0,.6);';
+    const frame = document.createElement('iframe');
+    frame.src = 'https://www.youtube.com/embed/' + encodeURIComponent(id) + '?autoplay=' + (playing ? 1 : 0) +
+      '&start=' + t + '&playsinline=1&enablejsapi=1&rel=0&modestbranding=1&origin=' + encodeURIComponent(location.origin);
+    frame.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+    frame.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;border:0;background:#000;';
+    const btn = (label, pos, fn) => {
+      const b = document.createElement('div');
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('width', '22');
+      svg.setAttribute('height', '22');
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('fill', '#fff');
+      path.setAttribute('d', label);
+      svg.appendChild(path);
+      b.appendChild(svg);
+      b.className = 'ytf-mini-btn';
+      b.style.cssText = 'position:absolute;top:8px;' + pos + ';width:36px;height:36px;border-radius:18px;background:rgba(0,0,0,.7);' +
+        'display:flex;align-items:center;justify-content:center;z-index:2;cursor:pointer;';
+      let last = 0;
+      for (const ev of ['click', 'touchend', 'pointerup']) {
+        b.addEventListener(ev, (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          const now = Date.now();
+          if (now - last < 500) return;
+          last = now;
+          fn();
+        }, true);
+      }
+      for (const ev of ['touchstart', 'pointerdown', 'mousedown']) {
+        b.addEventListener(ev, (e) => { e.stopPropagation(); }, true);
+      }
+      return b;
+    };
+    box.appendChild(frame);
+    box.appendChild(btn('M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z', 'left:8px', () => {
+      const target = '/watch?v=' + encodeURIComponent(mini.id) + '&t=' + Math.floor(mini.t) + 's';
+      closeMini();
+      location.assign(target);
+    }));
+    box.appendChild(btn('M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z', 'right:8px', () => { wantPlaying = false; closeMini(); }));
+    document.documentElement.appendChild(box);
+    Object.assign(mini, { active: true, id: id, t: t, state: playing ? 3 : 2, duration: 0, title: title || '', since: Date.now(), box: box, frame: frame });
+    wantPlaying = !!playing;
+    frame.addEventListener('load', () => {
+      try { frame.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*'); } catch (e) {}
+    });
+    reportCurrentMediaState();
+  }
+
+  window.addEventListener('message', (e) => {
+    if (!IS_TOP || !mini.active || !mini.frame || e.source !== mini.frame.contentWindow) return;
+    let d = e.data;
+    try { if (typeof d === 'string') d = JSON.parse(d); } catch (err) { return; }
+    if (!d) return;
+    if (DEBUG) ytfLog('mini msg ' + (d.event || '?') + ' ' + JSON.stringify(d.info === undefined ? '' : d.info).slice(0, 90));
+    if (d.event === 'onReady') {
+      try { mini.frame.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*'); } catch (err) {}
+    } else if (d.event === 'onStateChange' && typeof d.info === 'number') {
+      mini.state = d.info;
+    } else if (d.info && typeof d.info === 'object') {
+      const i = d.info;
+      if (typeof i.currentTime === 'number') mini.t = i.currentTime;
+      if (typeof i.playerState === 'number') mini.state = i.playerState;
+      if (typeof i.duration === 'number' && i.duration > 0) mini.duration = i.duration;
+      if (i.videoData && i.videoData.title) mini.title = i.videoData.title;
+    } else {
+      return;
+    }
+    // embeds sometimes sit at "unstarted/cued" with a big play button: start them if the user was watching
+    if ((mini.state === -1 || mini.state === 5) && wantPlaying && Date.now() - (mini.kick || 0) > 1200) {
+      mini.kick = Date.now();
+      miniCmd('playVideo');
+    }
+    reportCurrentMediaState();
+  }, false);
+
+  // Backgrounded (home, screen off) or PiP: turn the mini player into the real watch page,
+  // which keeps playing in the background and can use the native PiP window.
+  function restoreMiniToPage() {
+    if (!IS_TOP || !miniFront()) return false;
+    const playing = mini.state === 1 || mini.state === 3;
+    if (!playing) return false;
+    const id = mini.id;
+    const t = Math.floor(mini.t || 0);
+    closeMini();
+    wantPlaying = true;
+    try { sessionStorage.setItem('ytf_unmute', String(Date.now())); } catch (e) {}
+    location.assign('/watch?v=' + encodeURIComponent(id) + '&t=' + t + 's');
+    return true;
+  }
+
+  window.__ytf_miniOnBack = function () {
+    try {
+      if (!WEB_MINI || !IS_TOP || location.host.includes('music.youtube.com') || !/^\/watch/.test(location.pathname)) return false;
+      const v = findMainVideo();
+      const id = videoIdOf(location.href);
+      if (DEBUG) ytfLog('miniOnBack v=' + !!v + ' id=' + id + ' ad=' + adState.active + ' fs=' + !!document.fullscreenElement + ' path=' + location.pathname + ' inPip=' + inPip + ' pipSaved=' + pipSaved.length);
+      if (!v || !id || adState.active || document.fullscreenElement) return false;
+      saveProgress(true);
+      try {
+        sessionStorage.setItem('ytf_mini_pending', JSON.stringify({ id: id, t: v.currentTime, playing: !v.paused, title: (document.title || '').replace(/\s*-\s*YouTube.*$/i, ''), at: Date.now() }));
+        setTimeout(() => { try { sessionStorage.removeItem('ytf_mini_pending'); } catch (e) {} }, 4000);
+      } catch (e) {}
+      openMini(id, Math.floor(v.currentTime), !v.paused, (document.title || '').replace(/\s*-\s*YouTube.*$/i, ''));
+      wantPlaying = !v.paused;
+      try { v.pause(); } catch (e) {}
+      if (history.length > 1) history.back(); else location.assign('/');
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // History navigation after a page restore is a full page load: bring the mini player back on the new page.
+  setTimeout(() => {
+    if (!WEB_MINI || !IS_TOP) return;
+    try {
+      const raw = sessionStorage.getItem('ytf_mini_pending');
+      if (!raw) return;
+      sessionStorage.removeItem('ytf_mini_pending');
+      const d = JSON.parse(raw);
+      if (!d || Date.now() - d.at > 15000 || /^\/watch/.test(location.pathname) || mini.active) return;
+      const t = Math.floor(d.t + (d.playing ? (Date.now() - d.at) / 1000 : 0));
+      openMini(d.id, t, !!d.playing, d.title);
+    } catch (e) {}
+  }, 500);
+
+  // a new watch page replaces the mini player
+  setInterval(() => {
+    if (mini.active && Date.now() - mini.since > 2500 && /^\/watch/.test(location.pathname) && findMainVideo()) closeMini();
+  }, 700);
+
+  // PiP with a mini player: show only that player, full window
+  function miniPip(entering) {
+    if (!mini.box) return;
+    if (entering) {
+      mini.saved = mini.box.getAttribute('style');
+      mini.box.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;width:100vw;height:100vh;background:#000;z-index:2147483600;';
+      for (const b of mini.box.querySelectorAll('.ytf-mini-btn')) b.style.display = 'none';
+      document.body.style.setProperty('display', 'none', 'important');
+    } else {
+      if (mini.saved) mini.box.setAttribute('style', mini.saved);
+      for (const b of mini.box.querySelectorAll('.ytf-mini-btn')) b.style.display = 'flex';
+      document.body.style.removeProperty('display');
+    }
+  }
+
+  // Phone native mini bar helper: isolate only the video while the player WebView is docked
   // miniOn stops the PiP watchdog below from undoing the isolation while the player is docked.
   let miniOn = false;
   window.__ytf_setMini = function (on) { miniOn = !!on; if (on) pipEnter(); else pipExit(); };
@@ -1149,8 +1361,19 @@
       const wantIsolated = inPip || miniOn;
       if (!wantIsolated && (pipSaved.length > 0 || document.querySelector('[data-ytf-pip]'))) {
         pipExit();
-      } else if (wantIsolated && !pipNative && !pipSaved.length && findMainVideo() && /^\/watch/.test(location.pathname)) {
+      } else if (wantIsolated && !pipNative && !pipSaved.length && !miniFront() && findMainVideo() && /^\/watch/.test(location.pathname)) {
         pipEnter(); // also re-isolates the next video when autoplay moves on while docked
+      }
+      // Returning from the in-page mini player autoplays muted: switch the sound back on (desktop/TV only).
+      const stamp = WEB_MINI ? parseInt(sessionStorage.getItem('ytf_unmute') || '0', 10) : 0;
+      if (stamp) {
+        const v = findMainVideo();
+        if (Date.now() - stamp > 12000) sessionStorage.removeItem('ytf_unmute');
+        else if (v && v.muted && !adState.active) {
+          v.muted = false;
+          const unmute = document.querySelector('button.ytp-unmute');
+          if (unmute && unmute.offsetParent !== null) unmute.click();
+        }
       }
       // The player view loads without a user gesture, so YouTube autoplays muted: press its own unmute button.
       if (ROLE === 'player' && !adState.active) {

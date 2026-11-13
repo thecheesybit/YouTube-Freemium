@@ -425,7 +425,8 @@ public class MainActivity extends BridgeActivity {
                 orientationListener.enable();
             }
         }
-        mediaBridge = new MediaBridge("browse", (isPlaying, isVideo, title, artist, artworkUrl, duration, position, width, height, left, top, right, bottom) -> {
+        // TV has no second WebView: its role keeps youtube.js off the phone-only paths (swallowed watch links, paused /watch videos).
+        mediaBridge = new MediaBridge(cfg.tv ? "tv" : "browse", (isPlaying, isVideo, title, artist, artworkUrl, duration, position, width, height, left, top, right, bottom) -> {
             if (player != null && player.state() != PlayerHost.State.HIDDEN) return;
             runOnUiThread(() -> onMediaStateUpdated(isPlaying, isVideo, title, artist, artworkUrl, duration, position, width, height, left, top, right, bottom));
         }, new MediaBridge.Host() {
