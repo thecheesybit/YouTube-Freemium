@@ -12,7 +12,10 @@ Legend: **OPEN** = known gap. **UNVERIFIED** = code exists, never confirmed on r
 | # | Item | Status |
 |---|---|---|
 | P1 | Ad skipping depends on YouTube's markup and responses. When YouTube changes them, ads can return. Selectors live in `packages/inject/youtube-selectors.json` and the logic in `packages/inject/youtube.js` (response pruning + skip button + cosmetic hide). | OPEN (recurring maintenance) |
-| P2 | Not re-tested on a device since the shared platform code was last changed. Check: screen-off audio with lock-screen controls, Picture-in-Picture, in-app mini player on Back, speed pill 1x to 4x, YouTube and YouTube Music switcher, resume position, Google sign-in without a "browser not secure" warning. | UNVERIFIED |
+| P2 | **Verified on the Android 14 emulator, 2026-11-13 (release build 9, signed out):** playback with sound, screen-off audio keeps playing, Home-button Picture-in-Picture and return, native mini bar on Back (and tapping it), speed pill cycling, YouTube / YouTube Music switcher both ways, resume position after a force-stop, Shorts swipe up/down x5, Back never lands on an earlier video, no ads on three popular videos or the Home feed. **Still UNVERIFIED:** a real phone, lock-screen controls (not inspected), Google sign-in without a "browser not secure" warning, signed-in layout (the "All / For you" row), live streams, playlists, 360dp and large-font layouts. | PARTLY VERIFIED |
+| P4 | Portrait layout: YouTube offsets elements below the player by the hidden 48px top bar (description/comments sheet, "All / For you" row). Fixed with CSS overrides in `youtube.js` (player role). They depend on YouTube's own `top: calc(56.25vw + 48px)` rules, so re-measure if the layout shifts again (see `docs/DEVELOPMENT-MERGE-PLAN.md`, WP1). | OPEN (recurring maintenance) |
+| P5 | While a video is docked, Back on Home moves the app to the background and playback continues (by design, like the YouTube app). | by design |
+| P6 | YouTube Music shows its own "Open in the YouTube Music app" pop-up on first load. | OPEN (cosmetic) |
 | P3 | Brightness control (2-200 %) was added to Movy in Nov 2026 and is **not ported** to this repo. | OPEN (feature gap) |
 
 ## Android TV
