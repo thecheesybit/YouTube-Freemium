@@ -1081,7 +1081,9 @@
 
   // 9. Desktop compatibility stub & Mini mode helper
   window.__ytf_miniOnBack = function () { return false; };
-  window.__ytf_setMini = function (on) { if (on) pipEnter(); else pipExit(); };
+  // miniOn stops the PiP watchdog below from undoing the isolation while the player is docked.
+  let miniOn = false;
+  window.__ytf_setMini = function (on) { miniOn = !!on; if (on) pipEnter(); else pipExit(); };
 
   // YouTube Music player page back helper
   window.__ytf_collapseMusicPlayer = function () {
@@ -1134,10 +1136,16 @@
           inPip = window.YouTubeFreemiumBridge.inPip();
         }
       } catch (e) {}
-      if (!inPip && (pipSaved.length > 0 || document.querySelector('[data-ytf-pip]'))) {
+      const wantIsolated = inPip || miniOn;
+      if (!wantIsolated && (pipSaved.length > 0 || document.querySelector('[data-ytf-pip]'))) {
         pipExit();
-      } else if (inPip && !pipNative && !pipSaved.length && findMainVideo() && /^\/watch/.test(location.pathname)) {
-        pipEnter();
+      } else if (wantIsolated && !pipNative && !pipSaved.length && findMainVideo() && /^\/watch/.test(location.pathname)) {
+        pipEnter(); // also re-isolates the next video when autoplay moves on while docked
+      }
+      // The player view loads without a user gesture, so YouTube autoplays muted: press its own unmute button.
+      if (ROLE === 'player' && !adState.active) {
+        const unmute = document.querySelector('button.ytp-unmute');
+        if (unmute && unmute.offsetParent !== null) unmute.click();
       }
     } catch (e) {}
   }, 400);
