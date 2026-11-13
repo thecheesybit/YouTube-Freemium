@@ -145,6 +145,7 @@ public class MainActivity extends BridgeActivity {
             } else if (colorStr.startsWith("rgb")) {
                 String nums = colorStr.substring(colorStr.indexOf('(') + 1, colorStr.indexOf(')'));
                 String[] parts = nums.split(",");
+                if (parts.length > 3 && Float.parseFloat(parts[3].trim()) == 0f) return; // transparent: no page background yet
                 int r = Integer.parseInt(parts[0].trim());
                 int g = Integer.parseInt(parts[1].trim());
                 int b = Integer.parseInt(parts[2].trim());
@@ -152,6 +153,12 @@ public class MainActivity extends BridgeActivity {
             } else {
                 return;
             }
+            // Paint the bar itself, not just its icons: it kept the theme's grey in portrait. Under enforced
+            // edge-to-edge (API 35+) setStatusBarColor is ignored and the content view's padding shows through.
+            getWindow().setStatusBarColor(color);
+            getWindow().setNavigationBarColor(color); // applyBarAppearance also darkens the nav handle; keep it on a matching bar
+            View content = findViewById(android.R.id.content);
+            if (content != null) content.setBackgroundColor(color);
             applyBarAppearance(color);
         } catch (Exception ignored) {
         }
@@ -493,8 +500,9 @@ public class MainActivity extends BridgeActivity {
                         }
                     }
                 }
-                if (url != null && url.contains("/shorts/")) {
-                    if (player != null) player.close();
+                // Going to Shorts dismisses a docked video; a full-screen one was just opened (the page behind can land on a Short).
+                if (url != null && url.contains("/shorts/") && player != null && player.state() == PlayerHost.State.MINI) {
+                    player.close();
                 }
             }
             @Override public void onPageStarted(String url) {
@@ -551,8 +559,7 @@ public class MainActivity extends BridgeActivity {
             } else {
                 Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
                 Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
-                v.setPadding(bars.left, bars.top, bars.right, Math.max(bars.bottom, ime.bottom));
-            }
+                v.setPadding(bars.left, bars.top, bars.right, Math.max(bars.bottom, ime.bottom));            }
             return WindowInsetsCompat.CONSUMED;
         });
         applyBarAppearance(bg);
@@ -999,7 +1006,10 @@ public class MainActivity extends BridgeActivity {
             repo.openUrl("youtube-music", url);
         } else if (host.contains("youtube.com") || host.contains("youtu.be")) {
             if (!cfg.tv && BackPolicy.isWatch(url)) {
-                repo.openUrl("youtube", repo.active() != null && "youtube".equals(repo.active().id) ? repo.lastUrl(repo.active()) : "https://m.youtube.com");
+                String behind = repo.active() != null && "youtube".equals(repo.active().id) ? repo.lastUrl(repo.active()) : null;
+                // Reloading a Short behind the player would close it again (onUrl closes the player on /shorts/).
+                if (behind == null || behind.contains("/shorts/")) behind = "https://m.youtube.com";
+                repo.openUrl("youtube", behind);
                 if (player != null) player.open(url);
             } else {
                 repo.openUrl("youtube", url);

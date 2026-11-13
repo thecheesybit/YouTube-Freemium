@@ -56,6 +56,7 @@ final class PlayerHost {
     private ShellWebChromeClient chrome;
     private MediaBridge mediaBridge;
     private boolean pipActive = false;
+    private boolean imeVisible = false;
 
     // Mini player bar views
     private FrameLayout miniBar;
@@ -99,6 +100,11 @@ final class PlayerHost {
         if (root != null) {
             root.addView(container, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            // The keyboard always relayouts the window; the content view's own insets listener never sees it (a parent consumes them).
+            root.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+                androidx.core.view.WindowInsetsCompat w = androidx.core.view.ViewCompat.getRootWindowInsets(root);
+                if (w != null) setImeVisible(w.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()));
+            });
         }
 
         // Mini bar container for controls (sits alongside the WebView in MINI mode)
@@ -316,6 +322,14 @@ final class PlayerHost {
         }
 
         miniBar.setVisibility(View.VISIBLE);
+        container.setVisibility(imeVisible ? View.INVISIBLE : View.VISIBLE);
+    }
+
+    /** Like the app, the docked player steps aside while the keyboard is up (it rode up over search results). */
+    public void setImeVisible(boolean visible) {
+        if (imeVisible == visible) return;
+        imeVisible = visible;
+        if (state == State.MINI) container.setVisibility(visible ? View.INVISIBLE : View.VISIBLE);
     }
 
     public void updateMediaState(boolean isPlay, String title, String channel) {
