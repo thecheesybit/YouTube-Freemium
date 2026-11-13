@@ -1,0 +1,25 @@
+{
+  "name": "youtube-freemium",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "desktop:dev": "node scripts/desktop/gen-only.mjs --app youtube-freemium && electron apps/desktop",
+    "desktop:test": "npm test --workspace @ytfreemium/desktop",
+    "desktop:e2e": "node --test \"apps/desktop/test/e2e/*.test.mjs\"",
+    "install:android": "node scripts/install-android.mjs",
+    "schema": "node scripts/gen-schema.mjs",
+    "test": "node --test packages/inject/test/scamguard.test.mjs && npm test --workspace @movy/config && npm test --workspace @ytfreemium/desktop"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.1.0"
+  }
+}

@@ -1,0 +1,24 @@
+[package]
+name = "movy-adblock-node"
+version = "0.1.0"
+edition = "2021"
+description = "Node-API (napi-rs) binding over movy-adblock for the Electron desktop app"
+
+[lib]
+name = "movy_adblock_node"
+crate-type = ["cdylib"]
+
+[dependencies]
+movy-adblock = { path = "../adblock" }
+napi = { version = "3", default-features = false, features = ["napi9", "dyn-symbols"] }
+napi-derive = "3"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+codegen-units = 1
+
+[patch.crates-io]
+windows-link = { path = "vendor/windows-link" }
+napi-build = { path = "vendor/napi-build" }

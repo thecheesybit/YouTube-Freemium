@@ -1,0 +1,16 @@
+{
+  "name": "@ytfreemium/desktop",
+  "version": "1.0.0",
+  "private": true,
+  "author": "Ayush Kumar",
+  "description": "YouTube Freemium Electron desktop app",
+  "main": "src/main/main.js",
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\"",
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "^26.18.0"
+  }
+}

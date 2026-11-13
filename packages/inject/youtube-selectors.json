@@ -1,0 +1,70 @@
+{
+  "skipButtons": [
+    ".ytp-skip-ad-button",
+    ".ytp-ad-skip-button-modern",
+    ".ytp-ad-skip-button",
+    ".ytp-ad-skip-button-slot",
+    "button.ytp-ad-skip-button-modern",
+    ".ytp-ad-skip-button-text",
+    ".ytp-ad-skip-button-container button",
+    ".ytp-skip-ad button",
+    ".ytp-ad-skip-button-container .ytp-ad-skip-button-modern",
+    "button[id^=\"skip-button\"]",
+    ".video-ads button[class*=\"skip\"]"
+  ],
+  "adPlayerIndicators": [
+    ".ad-showing",
+    ".ad-interrupting",
+    ".video-ads .ytp-ad-player-overlay",
+    ".ytp-ad-player-overlay-flyout-cta"
+  ],
+  "adContainers": [
+    "#masthead-ad",
+    "ytd-ad-slot-renderer",
+    "ytd-promoted-sparkles-web-renderer",
+    "ytd-promoted-sparkles-text-search-renderer",
+    "ytd-display-ad-renderer",
+    ".ytp-ad-overlay-container",
+    "ytm-promoted-sparkles-web-renderer",
+    "#player-ads",
+    "ytd-in-feed-ad-layout-renderer",
+    "ytd-banner-promo-renderer",
+    "ytd-statement-banner-renderer",
+    "ytd-rich-item-renderer:has(ytd-ad-slot-renderer)",
+    "ytd-rich-item-renderer:has(ytd-in-feed-ad-layout-renderer)",
+    "ytd-rich-section-renderer:has(ytd-ad-slot-renderer)",
+    "ytd-rich-section-renderer:has(ytd-statement-banner-renderer)",
+    "ytd-item-section-renderer:has(> #contents > ytd-ad-slot-renderer)",
+    "ytd-promoted-video-renderer",
+    "ytd-compact-promoted-video-renderer",
+    "ytd-search-pyv-renderer",
+    "ytd-video-masthead-ad-v3-renderer",
+    "ytd-brand-video-singleton-renderer",
+    "ytd-brand-video-shelf-renderer",
+    "ytd-primetime-promo-renderer",
+    "ytd-action-companion-ad-renderer",
+    "ytd-companion-slot-renderer",
+    "ytd-player-legacy-desktop-watch-ads-renderer",
+    "ytd-engagement-panel-section-list-renderer[target-id=\"engagement-panel-ads\"]",
+    "#sparkles-container",
+    ".ytp-ad-overlay-slot",
+    ".ytp-ad-image-overlay",
+    ".ytp-ad-text-overlay",
+    ".ytp-suggested-action-badge-expanded-content-container ~ .ytp-ad-message-container",
+    "ytd-ad-inline-playback-meta-block",
+    "ytmusic-statement-banner-renderer",
+    "ytmusic-mealbar-promo-renderer",
+    "ytmusic-upsell-dialog-renderer"
+  ],
+  "enforcementDialogs": [
+    "ytd-enforcement-message-view-model",
+    "tp-yt-paper-dialog:has(#feedback)",
+    "yt-playability-error-supported-renderers",
+    "ytd-popup-container:has(ytd-enforcement-message-view-model)"
+  ],
+  "musicConfirmButtons": [
+    "ytmusic-you-there-renderer button",
+    "yt-button-renderer.ytmusic-you-there-renderer",
+    "tp-yt-paper-dialog .yt-button-renderer[dialog-confirm]"
+  ]
+}

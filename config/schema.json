@@ -1,0 +1,2069 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Config key; must equal the file name."
+    },
+    "appName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60,
+      "description": "Launcher label / window title."
+    },
+    "appId": {
+      "type": "string",
+      "description": "Android applicationId / Electron appId."
+    },
+    "url": {
+      "description": "Start URL of a single-site app (legacy; normalized to one source). Use `sources` for several.",
+      "type": "string",
+      "format": "uri"
+    },
+    "sources": {
+      "description": "Sources, in display order.",
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$",
+            "description": "Stable source id."
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "description": "Display name (the only thing shown in the UI)."
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Start URL (never shown in the UI)."
+          },
+          "allowedHosts": {
+            "description": "Default: URL host and its subdomains.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "accent": {
+            "description": "Accent colour; a palette colour is picked by index when missing.",
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          },
+          "enabled": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "url"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "recommendedSource": {
+      "description": "Id of the recommended source.",
+      "type": "string"
+    },
+    "tagline": {
+      "default": "",
+      "description": "Shown on the splash.",
+      "type": "string",
+      "maxLength": 120
+    },
+    "credit": {
+      "default": "",
+      "description": "Author credit shown on the splash.",
+      "type": "string",
+      "maxLength": 60
+    },
+    "island": {
+      "default": {
+        "visibility": "home"
+      },
+      "type": "object",
+      "properties": {
+        "visibility": {
+          "default": "home",
+          "type": "string",
+          "enum": [
+            "home",
+            "always"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "remote": {
+      "description": "Firebase Remote Config live config; omit to build without Firebase.",
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "const": "firebase-remote-config"
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parameter": {
+          "default": "movy_config",
+          "type": "string",
+          "minLength": 1
+        },
+        "googleServices": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path to google-services.json, relative to the repo root."
+        },
+        "template": {
+          "description": "Path to the Remote Config JSON source.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "provider",
+        "projectId",
+        "googleServices"
+      ],
+      "additionalProperties": false
+    },
+    "version": {
+      "default": "1.0.0",
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+([-+][0-9A-Za-z.-]+)?$"
+    },
+    "versionCode": {
+      "default": 1,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2100000000
+    },
+    "allowedHosts": {
+      "description": "Hosts allowed for in-app top-level navigation. Default: URL host and its subdomains.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "authHosts": {
+      "description": "Extra sign-in hosts (added to the built-in list) that a user tap may open as a top-level navigation.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "dohHosts": {
+      "description": "Hosts whose requests are answered over DNS-over-HTTPS, for networks whose resolver poisons a name the site depends on.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "externalLinks": {
+      "default": "block",
+      "description": "Non-allowed hosts: \"block\" (default, silently ignored) or \"in-app\". \"open-external\" is deprecated and treated as \"block\"; the app never launches other apps.",
+      "type": "string",
+      "enum": [
+        "block",
+        "in-app",
+        "open-external"
+      ]
+    },
+    "userAgent": {
+      "default": null,
+      "description": "null = platform default with WebView markers removed.",
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "backgroundColor": {
+      "default": "#000000",
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "orientation": {
+      "default": "any",
+      "type": "string",
+      "enum": [
+        "any",
+        "portrait",
+        "landscape"
+      ]
+    },
+    "adblock": {
+      "default": {
+        "enabled": true,
+        "lists": "default",
+        "extraLists": [],
+        "customRules": [],
+        "cosmetic": true,
+        "blockPopups": true
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Master switch for ad blocking.",
+          "type": "boolean"
+        },
+        "lists": {
+          "default": "default",
+          "description": "\"default\" or an array of filter list URLs.",
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "default"
+            },
+            {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uri"
+              }
+            }
+          ]
+        },
+        "extraLists": {
+          "default": [],
+          "description": "Filter list URLs appended to `lists`.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "customRules": {
+          "default": [],
+          "description": "Inline ABP/uBO filter rules.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cosmetic": {
+          "default": true,
+          "description": "Element hiding + scriptlets.",
+          "type": "boolean"
+        },
+        "blockPopups": {
+          "default": true,
+          "description": "Block window.open / target=_blank to non-allowed hosts.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "tvProfiles": {
+      "description": "Per-source TV navigation profiles (selectors only); overridable from Remote Config.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]+$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "notes": {
+            "description": "Free text for humans; ignored by the app.",
+            "type": "string",
+            "maxLength": 2000
+          },
+          "header": {
+            "description": "Hidden after 5 s idle, shown on input.",
+            "maxItems": 40,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 400
+            }
+          },
+          "bottomBar": {
+            "description": "Bottom bars hidden on idle.",
+            "maxItems": 40,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 400
+            }
+          },
+          "rows": {
+            "description": "Horizontal carousels (LEFT/RIGHT inside, UP/DOWN between rows).",
+            "maxItems": 40,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 400
+            }
+          },
+          "cards": {
+            "description": "Cards inside rows.",
+            "maxItems": 40,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 400
+            }
+          },
+          "focusables": {
+            "description": "Extra elements made focusable.",
+            "maxItems": 40,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 400
+            }
+          },
+          "skip": {
+            "description": "Never focused (rail arrows, dots, floating buttons).",
+            "maxItems": 40,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 400
+            }
+          },
+          "firstFocus": {
+            "description": "First focus on page load (hero Play), in priority order.",
+            "maxItems": 40,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 400
+            }
+          },
+          "playButtons": {
+            "description": "Elements that start playback: trigger auto-fullscreen.",
+            "maxItems": 40,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 400
+            }
+          },
+          "servers": {
+            "type": "object",
+            "properties": {
+              "toggle": {
+                "description": "Button that opens the site server picker.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "list": {
+                "description": "Container of the server items.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "item": {
+                "description": "One server entry (clickable).",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "active": {
+                "description": "The selected server entry.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "failed": {
+                "description": "Entry or banner shown when a server is dead.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "frame": {
+                "description": "Iframe holding the picker when it is not in the page itself.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              }
+            },
+            "additionalProperties": false
+          },
+          "episodes": {
+            "type": "object",
+            "properties": {
+              "list": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "item": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "next": {
+                "description": "Next-episode button.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              }
+            },
+            "additionalProperties": false
+          },
+          "player": {
+            "type": "object",
+            "properties": {
+              "frame": {
+                "description": "Player iframe or container.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "video": {
+                "description": "The <video> element (same-origin).",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "root": {
+                "description": "Player root element.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "fullscreenTarget": {
+                "description": "Element that receives requestFullscreen().",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 400
+              },
+              "fullscreenButton": {
+                "description": "The site's own fullscreen toggles, hidden with CSS on TV.",
+                "maxItems": 40,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 400
+                }
+              },
+              "controls": {
+                "description": "Player control bars hidden on idle.",
+                "maxItems": 40,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 400
+                }
+              },
+              "overlayKill": {
+                "description": "Intro layers and ad overlays in front of the player, hidden.",
+                "maxItems": 40,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 400
+                }
+              },
+              "depth": {
+                "description": "Iframe nesting depth of the real <video> (0 = same document).",
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4
+              }
+            },
+            "additionalProperties": false
+          },
+          "killOnTv": {
+            "description": "Heavy decorative media removed on TV (autoplaying trailer iframes).",
+            "maxItems": 40,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 400
+            }
+          },
+          "viewportWidth": {
+            "description": "CSS px layout width on TV; default 1280, a site may opt out with 960.",
+            "type": "integer",
+            "minimum": 320,
+            "maximum": 3840
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "cache": {
+      "description": "Disk asset cache (images, fonts, versioned static files); on by default for tv only.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Default: on for the tv target, off elsewhere.",
+          "type": "boolean"
+        },
+        "maxMb": {
+          "default": 300,
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 2000
+        },
+        "maxAgeDays": {
+          "default": 30,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365
+        }
+      },
+      "additionalProperties": false
+    },
+    "targets": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "phone": {
+          "type": "object",
+          "properties": {
+            "appName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60,
+              "description": "Launcher label / window title."
+            },
+            "appId": {
+              "type": "string",
+              "description": "Android applicationId / Electron appId."
+            },
+            "url": {
+              "description": "Start URL of a single-site app (legacy; normalized to one source). Use `sources` for several.",
+              "type": "string",
+              "format": "uri"
+            },
+            "sources": {
+              "description": "Sources, in display order.",
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9-]+$",
+                    "description": "Stable source id."
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40,
+                    "description": "Display name (the only thing shown in the UI)."
+                  },
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "Start URL (never shown in the UI)."
+                  },
+                  "allowedHosts": {
+                    "description": "Default: URL host and its subdomains.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "accent": {
+                    "description": "Accent colour; a palette colour is picked by index when missing.",
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{6}$"
+                  },
+                  "enabled": {
+                    "default": true,
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "url"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "recommendedSource": {
+              "description": "Id of the recommended source.",
+              "type": "string"
+            },
+            "tagline": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "credit": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "island": {
+              "type": "object",
+              "properties": {
+                "visibility": {
+                  "default": "home",
+                  "type": "string",
+                  "enum": [
+                    "home",
+                    "always"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            },
+            "remote": {
+              "description": "Firebase Remote Config live config; omit to build without Firebase.",
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "const": "firebase-remote-config"
+                },
+                "projectId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "parameter": {
+                  "default": "movy_config",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "googleServices": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Path to google-services.json, relative to the repo root."
+                },
+                "template": {
+                  "description": "Path to the Remote Config JSON source.",
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "provider",
+                "projectId",
+                "googleServices"
+              ],
+              "additionalProperties": false
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+([-+][0-9A-Za-z.-]+)?$"
+            },
+            "versionCode": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2100000000
+            },
+            "allowedHosts": {
+              "description": "Hosts allowed for in-app top-level navigation. Default: URL host and its subdomains.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "authHosts": {
+              "description": "Extra sign-in hosts (added to the built-in list) that a user tap may open as a top-level navigation.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "dohHosts": {
+              "description": "Hosts whose requests are answered over DNS-over-HTTPS, for networks whose resolver poisons a name the site depends on.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "externalLinks": {
+              "type": "string",
+              "enum": [
+                "block",
+                "in-app",
+                "open-external"
+              ]
+            },
+            "userAgent": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "backgroundColor": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "orientation": {
+              "type": "string",
+              "enum": [
+                "any",
+                "portrait",
+                "landscape"
+              ]
+            },
+            "tvProfiles": {
+              "description": "Per-source TV navigation profiles (selectors only); overridable from Remote Config.",
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[a-z0-9-]+$"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "notes": {
+                    "description": "Free text for humans; ignored by the app.",
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "header": {
+                    "description": "Hidden after 5 s idle, shown on input.",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "bottomBar": {
+                    "description": "Bottom bars hidden on idle.",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "rows": {
+                    "description": "Horizontal carousels (LEFT/RIGHT inside, UP/DOWN between rows).",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "cards": {
+                    "description": "Cards inside rows.",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "focusables": {
+                    "description": "Extra elements made focusable.",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "skip": {
+                    "description": "Never focused (rail arrows, dots, floating buttons).",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "firstFocus": {
+                    "description": "First focus on page load (hero Play), in priority order.",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "playButtons": {
+                    "description": "Elements that start playback: trigger auto-fullscreen.",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "servers": {
+                    "type": "object",
+                    "properties": {
+                      "toggle": {
+                        "description": "Button that opens the site server picker.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "list": {
+                        "description": "Container of the server items.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "item": {
+                        "description": "One server entry (clickable).",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "active": {
+                        "description": "The selected server entry.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "failed": {
+                        "description": "Entry or banner shown when a server is dead.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "frame": {
+                        "description": "Iframe holding the picker when it is not in the page itself.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "episodes": {
+                    "type": "object",
+                    "properties": {
+                      "list": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "item": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "next": {
+                        "description": "Next-episode button.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "player": {
+                    "type": "object",
+                    "properties": {
+                      "frame": {
+                        "description": "Player iframe or container.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "video": {
+                        "description": "The <video> element (same-origin).",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "root": {
+                        "description": "Player root element.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "fullscreenTarget": {
+                        "description": "Element that receives requestFullscreen().",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "fullscreenButton": {
+                        "description": "The site's own fullscreen toggles, hidden with CSS on TV.",
+                        "maxItems": 40,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 400
+                        }
+                      },
+                      "controls": {
+                        "description": "Player control bars hidden on idle.",
+                        "maxItems": 40,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 400
+                        }
+                      },
+                      "overlayKill": {
+                        "description": "Intro layers and ad overlays in front of the player, hidden.",
+                        "maxItems": 40,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 400
+                        }
+                      },
+                      "depth": {
+                        "description": "Iframe nesting depth of the real <video> (0 = same document).",
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 4
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "killOnTv": {
+                    "description": "Heavy decorative media removed on TV (autoplaying trailer iframes).",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "viewportWidth": {
+                    "description": "CSS px layout width on TV; default 1280, a site may opt out with 960.",
+                    "type": "integer",
+                    "minimum": 320,
+                    "maximum": 3840
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "cache": {
+              "description": "Disk asset cache (images, fonts, versioned static files); on by default for tv only.",
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "description": "Default: on for the tv target, off elsewhere.",
+                  "type": "boolean"
+                },
+                "maxMb": {
+                  "default": 300,
+                  "type": "integer",
+                  "minimum": 10,
+                  "maximum": 2000
+                },
+                "maxAgeDays": {
+                  "default": 30,
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 365
+                }
+              },
+              "additionalProperties": false
+            },
+            "adblock": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "lists": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "const": "default"
+                    },
+                    {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "format": "uri"
+                      }
+                    }
+                  ]
+                },
+                "extraLists": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "uri"
+                  }
+                },
+                "customRules": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "cosmetic": {
+                  "type": "boolean"
+                },
+                "blockPopups": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "tv": {
+          "type": "object",
+          "properties": {
+            "appName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60,
+              "description": "Launcher label / window title."
+            },
+            "appId": {
+              "type": "string",
+              "description": "Android applicationId / Electron appId."
+            },
+            "url": {
+              "description": "Start URL of a single-site app (legacy; normalized to one source). Use `sources` for several.",
+              "type": "string",
+              "format": "uri"
+            },
+            "sources": {
+              "description": "Sources, in display order.",
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9-]+$",
+                    "description": "Stable source id."
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40,
+                    "description": "Display name (the only thing shown in the UI)."
+                  },
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "Start URL (never shown in the UI)."
+                  },
+                  "allowedHosts": {
+                    "description": "Default: URL host and its subdomains.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "accent": {
+                    "description": "Accent colour; a palette colour is picked by index when missing.",
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{6}$"
+                  },
+                  "enabled": {
+                    "default": true,
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "url"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "recommendedSource": {
+              "description": "Id of the recommended source.",
+              "type": "string"
+            },
+            "tagline": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "credit": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "island": {
+              "type": "object",
+              "properties": {
+                "visibility": {
+                  "default": "home",
+                  "type": "string",
+                  "enum": [
+                    "home",
+                    "always"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            },
+            "remote": {
+              "description": "Firebase Remote Config live config; omit to build without Firebase.",
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "const": "firebase-remote-config"
+                },
+                "projectId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "parameter": {
+                  "default": "movy_config",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "googleServices": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Path to google-services.json, relative to the repo root."
+                },
+                "template": {
+                  "description": "Path to the Remote Config JSON source.",
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "provider",
+                "projectId",
+                "googleServices"
+              ],
+              "additionalProperties": false
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+([-+][0-9A-Za-z.-]+)?$"
+            },
+            "versionCode": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2100000000
+            },
+            "allowedHosts": {
+              "description": "Hosts allowed for in-app top-level navigation. Default: URL host and its subdomains.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "authHosts": {
+              "description": "Extra sign-in hosts (added to the built-in list) that a user tap may open as a top-level navigation.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "dohHosts": {
+              "description": "Hosts whose requests are answered over DNS-over-HTTPS, for networks whose resolver poisons a name the site depends on.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "externalLinks": {
+              "type": "string",
+              "enum": [
+                "block",
+                "in-app",
+                "open-external"
+              ]
+            },
+            "userAgent": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "backgroundColor": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "orientation": {
+              "type": "string",
+              "enum": [
+                "any",
+                "portrait",
+                "landscape"
+              ]
+            },
+            "tvProfiles": {
+              "description": "Per-source TV navigation profiles (selectors only); overridable from Remote Config.",
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[a-z0-9-]+$"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "notes": {
+                    "description": "Free text for humans; ignored by the app.",
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "header": {
+                    "description": "Hidden after 5 s idle, shown on input.",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "bottomBar": {
+                    "description": "Bottom bars hidden on idle.",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "rows": {
+                    "description": "Horizontal carousels (LEFT/RIGHT inside, UP/DOWN between rows).",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "cards": {
+                    "description": "Cards inside rows.",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "focusables": {
+                    "description": "Extra elements made focusable.",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "skip": {
+                    "description": "Never focused (rail arrows, dots, floating buttons).",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "firstFocus": {
+                    "description": "First focus on page load (hero Play), in priority order.",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "playButtons": {
+                    "description": "Elements that start playback: trigger auto-fullscreen.",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "servers": {
+                    "type": "object",
+                    "properties": {
+                      "toggle": {
+                        "description": "Button that opens the site server picker.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "list": {
+                        "description": "Container of the server items.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "item": {
+                        "description": "One server entry (clickable).",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "active": {
+                        "description": "The selected server entry.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "failed": {
+                        "description": "Entry or banner shown when a server is dead.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "frame": {
+                        "description": "Iframe holding the picker when it is not in the page itself.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "episodes": {
+                    "type": "object",
+                    "properties": {
+                      "list": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "item": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "next": {
+                        "description": "Next-episode button.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "player": {
+                    "type": "object",
+                    "properties": {
+                      "frame": {
+                        "description": "Player iframe or container.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "video": {
+                        "description": "The <video> element (same-origin).",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "root": {
+                        "description": "Player root element.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "fullscreenTarget": {
+                        "description": "Element that receives requestFullscreen().",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "fullscreenButton": {
+                        "description": "The site's own fullscreen toggles, hidden with CSS on TV.",
+                        "maxItems": 40,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 400
+                        }
+                      },
+                      "controls": {
+                        "description": "Player control bars hidden on idle.",
+                        "maxItems": 40,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 400
+                        }
+                      },
+                      "overlayKill": {
+                        "description": "Intro layers and ad overlays in front of the player, hidden.",
+                        "maxItems": 40,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 400
+                        }
+                      },
+                      "depth": {
+                        "description": "Iframe nesting depth of the real <video> (0 = same document).",
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 4
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "killOnTv": {
+                    "description": "Heavy decorative media removed on TV (autoplaying trailer iframes).",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "viewportWidth": {
+                    "description": "CSS px layout width on TV; default 1280, a site may opt out with 960.",
+                    "type": "integer",
+                    "minimum": 320,
+                    "maximum": 3840
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "cache": {
+              "description": "Disk asset cache (images, fonts, versioned static files); on by default for tv only.",
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "description": "Default: on for the tv target, off elsewhere.",
+                  "type": "boolean"
+                },
+                "maxMb": {
+                  "default": 300,
+                  "type": "integer",
+                  "minimum": 10,
+                  "maximum": 2000
+                },
+                "maxAgeDays": {
+                  "default": 30,
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 365
+                }
+              },
+              "additionalProperties": false
+            },
+            "adblock": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "lists": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "const": "default"
+                    },
+                    {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "format": "uri"
+                      }
+                    }
+                  ]
+                },
+                "extraLists": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "uri"
+                  }
+                },
+                "customRules": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "cosmetic": {
+                  "type": "boolean"
+                },
+                "blockPopups": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "desktop": {
+          "type": "object",
+          "properties": {
+            "appName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60,
+              "description": "Launcher label / window title."
+            },
+            "appId": {
+              "type": "string",
+              "description": "Android applicationId / Electron appId."
+            },
+            "url": {
+              "description": "Start URL of a single-site app (legacy; normalized to one source). Use `sources` for several.",
+              "type": "string",
+              "format": "uri"
+            },
+            "sources": {
+              "description": "Sources, in display order.",
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9-]+$",
+                    "description": "Stable source id."
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40,
+                    "description": "Display name (the only thing shown in the UI)."
+                  },
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "Start URL (never shown in the UI)."
+                  },
+                  "allowedHosts": {
+                    "description": "Default: URL host and its subdomains.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "accent": {
+                    "description": "Accent colour; a palette colour is picked by index when missing.",
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{6}$"
+                  },
+                  "enabled": {
+                    "default": true,
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "url"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "recommendedSource": {
+              "description": "Id of the recommended source.",
+              "type": "string"
+            },
+            "tagline": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "credit": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "island": {
+              "type": "object",
+              "properties": {
+                "visibility": {
+                  "default": "home",
+                  "type": "string",
+                  "enum": [
+                    "home",
+                    "always"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            },
+            "remote": {
+              "description": "Firebase Remote Config live config; omit to build without Firebase.",
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "const": "firebase-remote-config"
+                },
+                "projectId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "parameter": {
+                  "default": "movy_config",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "googleServices": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Path to google-services.json, relative to the repo root."
+                },
+                "template": {
+                  "description": "Path to the Remote Config JSON source.",
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "provider",
+                "projectId",
+                "googleServices"
+              ],
+              "additionalProperties": false
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+([-+][0-9A-Za-z.-]+)?$"
+            },
+            "versionCode": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2100000000
+            },
+            "allowedHosts": {
+              "description": "Hosts allowed for in-app top-level navigation. Default: URL host and its subdomains.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "authHosts": {
+              "description": "Extra sign-in hosts (added to the built-in list) that a user tap may open as a top-level navigation.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "dohHosts": {
+              "description": "Hosts whose requests are answered over DNS-over-HTTPS, for networks whose resolver poisons a name the site depends on.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "externalLinks": {
+              "type": "string",
+              "enum": [
+                "block",
+                "in-app",
+                "open-external"
+              ]
+            },
+            "userAgent": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "backgroundColor": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "orientation": {
+              "type": "string",
+              "enum": [
+                "any",
+                "portrait",
+                "landscape"
+              ]
+            },
+            "tvProfiles": {
+              "description": "Per-source TV navigation profiles (selectors only); overridable from Remote Config.",
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[a-z0-9-]+$"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "notes": {
+                    "description": "Free text for humans; ignored by the app.",
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "header": {
+                    "description": "Hidden after 5 s idle, shown on input.",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "bottomBar": {
+                    "description": "Bottom bars hidden on idle.",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "rows": {
+                    "description": "Horizontal carousels (LEFT/RIGHT inside, UP/DOWN between rows).",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "cards": {
+                    "description": "Cards inside rows.",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "focusables": {
+                    "description": "Extra elements made focusable.",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "skip": {
+                    "description": "Never focused (rail arrows, dots, floating buttons).",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "firstFocus": {
+                    "description": "First focus on page load (hero Play), in priority order.",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "playButtons": {
+                    "description": "Elements that start playback: trigger auto-fullscreen.",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "servers": {
+                    "type": "object",
+                    "properties": {
+                      "toggle": {
+                        "description": "Button that opens the site server picker.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "list": {
+                        "description": "Container of the server items.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "item": {
+                        "description": "One server entry (clickable).",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "active": {
+                        "description": "The selected server entry.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "failed": {
+                        "description": "Entry or banner shown when a server is dead.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "frame": {
+                        "description": "Iframe holding the picker when it is not in the page itself.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "episodes": {
+                    "type": "object",
+                    "properties": {
+                      "list": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "item": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "next": {
+                        "description": "Next-episode button.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "player": {
+                    "type": "object",
+                    "properties": {
+                      "frame": {
+                        "description": "Player iframe or container.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "video": {
+                        "description": "The <video> element (same-origin).",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "root": {
+                        "description": "Player root element.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "fullscreenTarget": {
+                        "description": "Element that receives requestFullscreen().",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 400
+                      },
+                      "fullscreenButton": {
+                        "description": "The site's own fullscreen toggles, hidden with CSS on TV.",
+                        "maxItems": 40,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 400
+                        }
+                      },
+                      "controls": {
+                        "description": "Player control bars hidden on idle.",
+                        "maxItems": 40,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 400
+                        }
+                      },
+                      "overlayKill": {
+                        "description": "Intro layers and ad overlays in front of the player, hidden.",
+                        "maxItems": 40,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 400
+                        }
+                      },
+                      "depth": {
+                        "description": "Iframe nesting depth of the real <video> (0 = same document).",
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 4
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "killOnTv": {
+                    "description": "Heavy decorative media removed on TV (autoplaying trailer iframes).",
+                    "maxItems": 40,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 400
+                    }
+                  },
+                  "viewportWidth": {
+                    "description": "CSS px layout width on TV; default 1280, a site may opt out with 960.",
+                    "type": "integer",
+                    "minimum": 320,
+                    "maximum": 3840
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "cache": {
+              "description": "Disk asset cache (images, fonts, versioned static files); on by default for tv only.",
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "description": "Default: on for the tv target, off elsewhere.",
+                  "type": "boolean"
+                },
+                "maxMb": {
+                  "default": 300,
+                  "type": "integer",
+                  "minimum": 10,
+                  "maximum": 2000
+                },
+                "maxAgeDays": {
+                  "default": 30,
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 365
+                }
+              },
+              "additionalProperties": false
+            },
+            "adblock": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "lists": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "const": "default"
+                    },
+                    {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "format": "uri"
+                      }
+                    }
+                  ]
+                },
+                "extraLists": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "uri"
+                  }
+                },
+                "customRules": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "cosmetic": {
+                  "type": "boolean"
+                },
+                "blockPopups": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "$schema": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "appName",
+    "appId"
+  ],
+  "additionalProperties": false,
+  "title": "Movy app config"
+}

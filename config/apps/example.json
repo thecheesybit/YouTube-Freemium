@@ -1,0 +1,59 @@
+{
+  "$schema": "../schema.json",
+  "name": "example",
+  "appName": "YouTube Freemium",
+  "tagline": "Ad-free YouTube and YouTube Music",
+  "credit": "by Ayush Kumar",
+  "appId": "com.ayushkumar.youtubefreemium",
+  "version": "1.0.0",
+  "versionCode": 1,
+  "sources": [
+    {
+      "id": "one",
+      "name": "YouTube Example",
+      "url": "https://example.com/",
+      "allowedHosts": [
+        "example.com",
+        "*.example.com"
+      ],
+      "accent": "#FF0000"
+    },
+    {
+      "id": "two",
+      "name": "YouTube Music Example",
+      "url": "https://example.org/",
+      "allowedHosts": [
+        "example.org",
+        "*.example.org"
+      ],
+      "accent": "#FF0033"
+    }
+  ],
+  "recommendedSource": "one",
+  "island": {
+    "visibility": "always"
+  },
+  "externalLinks": "block",
+  "userAgent": null,
+  "backgroundColor": "#0F0F0F",
+  "orientation": "any",
+  "authHosts": [
+    "accounts.youtube.com",
+    "myaccount.google.com",
+    "consent.youtube.com",
+    "consent.google.com"
+  ],
+  "adblock": {
+    "enabled": true,
+    "lists": "default",
+    "extraLists": [],
+    "customRules": [],
+    "cosmetic": true,
+    "blockPopups": true
+  },
+  "cache": {
+    "enabled": true,
+    "maxMb": 100,
+    "maxAgeDays": 14
+  }
+}

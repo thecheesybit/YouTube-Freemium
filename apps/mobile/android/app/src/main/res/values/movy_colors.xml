@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Design tokens (mirrors UiTokens.java). One place for the Dynamic Island and iOS-style panels. -->
+<resources>
+    <color name="movy_black">#000000</color>
+    <color name="movy_surface">#1C1C1E</color>
+    <color name="movy_card">#2C2C2E</color>
+    <color name="movy_separator">#38383A</color>
+    <color name="movy_label">#FFFFFF</color>
+    <color name="movy_label_secondary">#8E8E93</color>
+    <color name="movy_label_island">#EBEBF5</color>
+    <color name="movy_hairline">#14FFFFFF</color>
+    <color name="movy_blue">#0A84FF</color>
+    <color name="movy_green">#34C759</color>
+    <color name="movy_red">#FF453A</color>
+    <color name="movy_switch_off">#39393D</color>
+    <color name="movy_health_up">#30D158</color>
+    <color name="movy_health_slow">#FFD60A</color>
+    <color name="movy_health_down">#FF453A</color>
+    <color name="movy_health_unknown">#8E8E93</color>
+    <color name="movy_badge_blue">#0A84FF</color>
+    <color name="movy_badge_green">#30D158</color>
+    <color name="movy_badge_orange">#FF9F0A</color>
+    <color name="movy_badge_purple">#BF5AF2</color>
+    <color name="movy_badge_grey">#8E8E93</color>
+    <color name="movy_badge_red">#FF453A</color>
+    <color name="movy_scrim">#59000000</color>
+</resources>

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src file:; style-src file: 'unsafe-inline'; img-src data:">
+<title>YouTube Freemium</title>
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="chrome.css">
+</head>
+<body>
+<header id="bar">
+  <nav id="nav" aria-label="History">
+    <button id="back" class="btn" aria-label="Back" title="Back (Alt+Left)" disabled>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 4.5 8 12l7.5 7.5" /></svg>
+    </button>
+    <button id="forward" class="btn" aria-label="Forward" title="Forward (Alt+Right)" disabled>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 4.5 16 12l-7.5 7.5" /></svg>
+    </button>
+    <button id="reload" class="btn" aria-label="Reload" title="Reload (Ctrl+R)">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3" /><path d="M19.5 4.5v4.2h-4.2" /></svg>
+    </button>
+  </nav>
+  <div id="title"></div>
+  <!-- the native window buttons are drawn over this reserved area -->
+  <div id="reserve" aria-hidden="true"></div>
+</header>
+<script src="chrome.js"></script>
+</body>
+</html>

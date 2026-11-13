@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <!-- app_name and title_activity_main are generated via resValue (see app/build.gradle) -->
+    <string name="package_name">app.movy.shell</string>
+    <string name="custom_url_scheme">app.movy.shell</string>
+</resources>

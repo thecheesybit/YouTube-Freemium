@@ -1,0 +1,21 @@
+▶️ *YouTube Freemium* — YouTube & YouTube Music, ad-free ✨
+
+Maine apna khud ka app banaya hai. Download karo, install karo, enjoy karo 👇
+
+🚫 *Ads gayab* — pre-roll, mid-roll, overlays; jo bachte hain wo turant skip ("Skipping ads for you" pill upar se aati hai)
+🎧 *Screen off karke bhi gaana/video chalta rahe* — lock screen aur notification se controls
+🪟 *Picture-in-Picture* — video ko floating window me chhod ke kuch aur karo
+📱 *App ke andar mini player* — Back dabao, video chhota hokar chalta rahe, home feed browse karo
+⚡ *Speed 4x tak* — "1x" pe tap karo (1 → 1.25 → 1.5 → 2 → 3 → 4)
+🔀 *YouTube ⇄ YouTube Music* — side ka switcher, dono apne asli logo ke saath
+▶️ Jahan ruke the wahin se resume
+
+*Install kaise kare*
+1️⃣ APK file download karo
+2️⃣ Tap karke open karo → "Install unknown apps" ya "Allow from this source" allow karo
+3️⃣ Install → Open ✅
+4️⃣ (Optional) Settings → Battery me app ko "Unrestricted" kar do, taaki background music kabhi na ruke
+
+_Note: ye ek independent wrapper hai, YouTube/Google se affiliated nahi hai. Apne risk pe use karo, aur creators ko support karna mat bhulo ❤️_
+
+*Crafted by Ayush Kumar with ❤️*

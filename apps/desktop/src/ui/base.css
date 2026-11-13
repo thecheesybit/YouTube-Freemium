@@ -1,0 +1,50 @@
+/* Shared tokens (mirror UiTokens.java / movy_colors.xml): Island-v2 / iOS look. */
+:root {
+  --black: #000;
+  --surface: #1c1c1e;
+  --card: #2c2c2e;
+  --separator: #38383a;
+  --label: #fff;
+  --label-2: #8e8e93;
+  --label-island: rgba(235, 235, 245, 0.6);
+  --hairline: rgba(255, 255, 255, 0.08);
+  --blue: #0a84ff;
+  --green: #34c759;
+  --red: #ff453a;
+  --switch-off: #39393d;
+  --health-up: #30d158;
+  --health-slow: #ffd60a;
+  --health-down: #ff453a;
+  --health-unknown: #8e8e93;
+  --brand: #e50914;
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+* { scrollbar-width: none !important; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; color: var(--label);
+  font: 400 15px/1.3 var(--font); letter-spacing: -0.01em; -webkit-user-select: none; user-select: none; cursor: default; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; letter-spacing: inherit; }
+button:focus { outline: none; }
+button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* Source tile: squircle with a vertical gradient, white monogram and an inner top highlight. */
+.tile { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none;
+  border-radius: 26%; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28); }
+.tile .mono { color: #fff; font-weight: 600; line-height: 1; }
+.dot { position: absolute; right: -2px; bottom: -2px; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--health-unknown); box-shadow: 0 0 0 2px #000; }
+.dot.h-up { background: var(--health-up); }
+.dot.h-slow { background: var(--health-slow); }
+.dot.h-down { background: var(--health-down); }
+.dot.h-unknown { background: var(--health-unknown); }
+.dot.plain { position: static; box-shadow: none; display: inline-block; }
+
+/* iOS switch: 51x31, knob moves with a spring. */
+.switch { position: relative; width: 51px; height: 31px; border-radius: 16px; background: var(--switch-off); flex: none;
+  transition: background-color 0.25s ease; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%;
+  background: #fff; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); transition: transform 0.45s var(--spring-soft, ease); }
+.switch[aria-checked="true"] { background: var(--green); }
+.switch[aria-checked="true"]::after { transform: translateX(20px); }

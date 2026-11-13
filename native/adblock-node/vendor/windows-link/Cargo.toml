@@ -1,0 +1,6 @@
+[package]
+name = "windows-link"
+version = "0.2.1"
+edition = "2021"
+description = "Movy patch of windows-link: plain extern blocks (no raw-dylib), so the windows-gnu toolchain needs no dlltool/as. Only kernel32 symbols are used (by libloading), which std already links."
+license = "MIT OR Apache-2.0"
