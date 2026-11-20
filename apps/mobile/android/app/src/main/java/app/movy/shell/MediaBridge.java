@@ -25,6 +25,7 @@ public class MediaBridge {
     private Host host;
     private java.util.function.Consumer<Boolean> adListener;
     private Runnable pipListener;
+    private java.util.function.Consumer<Float> dragListener;
     /** Set by MainActivity in onPictureInPictureModeChanged; read by the JS bridge on a binder thread. */
     private volatile boolean pipActive = false;
     private volatile boolean musicPlayerOpen = false;
@@ -49,6 +50,10 @@ public class MediaBridge {
 
     public void setPipListener(Runnable r) {
         this.pipListener = r;
+    }
+
+    public void setDragListener(java.util.function.Consumer<Float> l) {
+        this.dragListener = l;
     }
 
     /** Called by MainActivity on the UI thread to keep track of the PiP state. */
@@ -89,6 +94,12 @@ public class MediaBridge {
     @JavascriptInterface
     public void minimize() {
         if (host != null) host.minimize();
+    }
+
+    /** JS bridge: the player page is being dragged down by {@code cssPx} (0 = released without docking). */
+    @JavascriptInterface
+    public void dragPlayer(float cssPx) {
+        if (dragListener != null) dragListener.accept(cssPx);
     }
 
     @JavascriptInterface

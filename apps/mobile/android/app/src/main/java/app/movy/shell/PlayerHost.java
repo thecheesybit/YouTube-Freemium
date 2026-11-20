@@ -230,6 +230,7 @@ final class PlayerHost {
         mediaBridge.setPipActive(pipActive);
         mediaBridge.setAdListener(on -> activity.runOnUiThread(() -> host.onAdSkipping(on)));
         mediaBridge.setPipListener(() -> activity.runOnUiThread(host::onEnterPip));
+        mediaBridge.setDragListener(dy -> activity.runOnUiThread(() -> onDrag(dy)));
 
         playerWebView.addJavascriptInterface(mediaBridge, MediaBridge.NAME);
         if (!cfg.tv) playerWebView.setDownloadListener(new DownloadHandler(activity));
@@ -250,8 +251,19 @@ final class PlayerHost {
         host.onPlayerStateChanged(state);
     }
 
+    /** Follows a downward drag on the player (like the app); 0 springs back. Docking itself is {@link #minimize()}. */
+    private void onDrag(float cssPx) {
+        if (state != State.FULL) return;
+        float px = Math.max(0f, cssPx) * activity.getResources().getDisplayMetrics().density;
+        container.animate().cancel();
+        if (px == 0f) container.animate().translationY(0f).setDuration(180).start();
+        else container.setTranslationY(px);
+    }
+
     public void minimize() {
         if (state != State.FULL || playerWebView == null) return;
+        container.animate().cancel();
+        container.setTranslationY(0f);
 
         // Tell player page to isolate only the video element before resizing
         playerWebView.evaluateJavascript("window.__ytf_setMini&&window.__ytf_setMini(true)", null);
@@ -283,6 +295,8 @@ final class PlayerHost {
             playerWebView.loadUrl("about:blank");
         }
         isPlaying = false;
+        container.animate().cancel();
+        container.setTranslationY(0f);
         container.setVisibility(View.GONE);
         state = State.HIDDEN;
         host.onPlayerStateChanged(state);

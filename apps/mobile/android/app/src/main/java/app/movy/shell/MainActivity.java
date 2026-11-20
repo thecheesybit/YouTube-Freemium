@@ -153,15 +153,25 @@ public class MainActivity extends BridgeActivity {
             } else {
                 return;
             }
-            // Paint the bar itself, not just its icons: it kept the theme's grey in portrait. Under enforced
-            // edge-to-edge (API 35+) setStatusBarColor is ignored and the content view's padding shows through.
-            getWindow().setStatusBarColor(color);
-            getWindow().setNavigationBarColor(color); // applyBarAppearance also darkens the nav handle; keep it on a matching bar
-            View content = findViewById(android.R.id.content);
-            if (content != null) content.setBackgroundColor(color);
-            applyBarAppearance(color);
+            pageColor = color;
+            applyPageColor();
         } catch (Exception ignored) {
         }
+    }
+
+    /** Last page background reported by the visible site; null until one arrives. */
+    private Integer pageColor;
+
+    private void applyPageColor() {
+        if (pageColor == null) return;
+        int color = pageColor;
+        // Paint the bar itself, not just its icons: it kept the theme's grey in portrait. Under enforced
+        // edge-to-edge (API 35+) setStatusBarColor is ignored and the content view's padding shows through.
+        getWindow().setStatusBarColor(color);
+        getWindow().setNavigationBarColor(color); // applyBarAppearance also darkens the nav handle; keep it on a matching bar
+        View content = findViewById(android.R.id.content);
+        if (content != null) content.setBackgroundColor(color);
+        applyBarAppearance(color);
     }
 
     private boolean isAutoRotateEnabled() {
@@ -407,11 +417,18 @@ public class MainActivity extends BridgeActivity {
 
                     if (landscape && !wasLandscape) {
                         wasLandscape = true;
-                        if (player != null && player.state() == PlayerHost.State.FULL && isMediaPlaying && isVideoMedia && !isAnyFullscreen()) {
+                        // Like the app, turning the phone opens the open video fullscreen, playing or paused.
+                        if (player != null && player.state() == PlayerHost.State.FULL && isVideoMedia && !isAnyFullscreen()) {
                             injectGestureKey(player.webView());
                             if (player.webView() != null) {
                                 player.webView().evaluateJavascript("window.__ytf_requestFullscreen ? window.__ytf_requestFullscreen() : (function(){var b=document.querySelector('button.fullscreen-icon,.ytp-fullscreen-button,button[aria-label*=\"ull screen\"]');if(b)b.click();})()", null);
                             }
+                        } else if (repo != null && repo.active() != null && "youtube-music".equals(repo.active().id)
+                                && mediaBridge != null && mediaBridge.isMusicPlayerOpen() && !isAnyFullscreen()
+                                && bridge != null && bridge.getWebView() != null) {
+                            // YouTube Music's now-playing page: the page decides (music videos only).
+                            injectGestureKey(bridge.getWebView());
+                            bridge.getWebView().evaluateJavascript("window.__ytf_requestFullscreen&&window.__ytf_requestFullscreen()", null);
                         }
                     } else if (portrait && wasLandscape) {
                         wasLandscape = false;
@@ -645,6 +662,8 @@ public class MainActivity extends BridgeActivity {
     public void onConfigurationChanged(android.content.res.Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         if (!isAnyFullscreen()) applyRestOrientation();
+        // Fullscreen and rotation reset the bar icons to the theme's (dark icons on a dark page): re-apply the page's.
+        if (!isAnyFullscreen() && cfg != null && !cfg.tv) getWindow().getDecorView().postDelayed(() -> { if (!isAnyFullscreen()) applyPageColor(); }, 250);
         if (chrome != null) chrome.onConfigurationChanged();
         if (player != null && player.chrome() != null) player.chrome().onConfigurationChanged();
     }
@@ -967,7 +986,17 @@ public class MainActivity extends BridgeActivity {
         this.isVideoMedia = isVideo;
         this.mediaWidth = width > 0 ? width : 16;
         this.mediaHeight = height > 0 ? height : 9;
-        this.mediaRect.set(left, top, right, bottom);
+        // The page reports CSS pixels inside its WebView; the PiP source-rect hint is in window pixels.
+        WebView mv = mediaView();
+        if (mv != null) {
+            float d = getResources().getDisplayMetrics().density;
+            int[] at = new int[2];
+            mv.getLocationInWindow(at);
+            this.mediaRect.set(at[0] + Math.round(left * d), at[1] + Math.round(top * d),
+                    at[0] + Math.round(right * d), at[1] + Math.round(bottom * d));
+        } else {
+            this.mediaRect.setEmpty();
+        }
 
         // Phase 3 item 1: Screen never sleeps during a video
         if (isPlaying && isVideo) {

@@ -369,6 +369,7 @@
       // Swipe down to minimize & hold 500ms to play at 2x
       let touchStartY = 0;
       let touchStartX = 0;
+      let touchStartScreenY = 0;
       let isTouchOnPlayer = false;
       let holdTimer = null;
       let originalRate = 1;
@@ -378,6 +379,7 @@
         if (!t) return;
         touchStartY = t.clientY;
         touchStartX = t.clientX;
+        touchStartScreenY = t.screenY;
         const target = e.target;
         isTouchOnPlayer = !!(target && target.closest && (target.closest('#player-container-id') || target.closest('video') || target.closest('.html5-video-player')));
 
@@ -392,41 +394,51 @@
         }
       }, { capture: true, passive: true });
 
+      // Dragging the video down follows the finger (the native view moves) and docks it, like the app.
+      // Non-passive: once it is a downward drag the gesture is ours, else the page scrolls and cancels it halfway.
+      let dragDy = 0;
+      let dragging = false;
+      const bridgeDrag = (px) => { try { window.YouTubeFreemiumBridge.dragPlayer(px); } catch (err) {} };
       window.addEventListener('touchmove', (e) => {
         const t = e.touches && e.touches[0];
         if (!t) return;
-        if (Math.abs(t.clientY - touchStartY) > 10 || Math.abs(t.clientX - touchStartX) > 10) {
-          if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
-        }
-      }, { capture: true, passive: true });
-
-      window.addEventListener('touchend', (e) => {
-        if (holdTimer) {
-          clearTimeout(holdTimer);
-          holdTimer = null;
-          const v = findMainVideo();
-          if (v && v.playbackRate === 2.0) v.playbackRate = originalRate;
-        }
-        const t = e.changedTouches && e.changedTouches[0];
-        if (!t || !isTouchOnPlayer) return;
         const dy = t.clientY - touchStartY;
         const dx = Math.abs(t.clientX - touchStartX);
-        const fs = document.fullscreenElement || document.webkitFullscreenElement;
-        if (dy > 80 && dy > dx * 1.5 && !fs) {
-          if (window.YouTubeFreemiumBridge && window.YouTubeFreemiumBridge.minimize) {
-            window.YouTubeFreemiumBridge.minimize();
-          }
+        if (Math.abs(dy) > 10 || dx > 10) {
+          if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
         }
-      }, { capture: true, passive: true });
+        if (!isTouchOnPlayer || document.fullscreenElement || document.webkitFullscreenElement) return;
+        if (!dragging && dy > 12 && dy > dx * 1.5) dragging = true;
+        if (!dragging) return;
+        e.preventDefault();
+        e.stopImmediatePropagation(); // the player must not see the drag (it reads the lift as a tap: pause / next)
+        // screenY, not clientY: the view itself moves with the finger, so page coordinates barely change.
+        dragDy = Math.max(0, t.screenY - touchStartScreenY);
+        bridgeDrag(dragDy);
+      }, { capture: true, passive: false });
 
-      window.addEventListener('touchcancel', () => {
+      const endTouch = (e) => {
+        if (dragging && e) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
         if (holdTimer) {
           clearTimeout(holdTimer);
           holdTimer = null;
           const v = findMainVideo();
           if (v && v.playbackRate === 2.0) v.playbackRate = originalRate;
         }
-      }, { capture: true, passive: true });
+        if (!dragging) return;
+        dragging = false;
+        if (dragDy > 80 && window.YouTubeFreemiumBridge && window.YouTubeFreemiumBridge.minimize) {
+          window.YouTubeFreemiumBridge.minimize();
+        } else {
+          bridgeDrag(0);
+        }
+        dragDy = 0;
+      };
+      window.addEventListener('touchend', endTouch, { capture: true, passive: false });
+      window.addEventListener('touchcancel', endTouch, { capture: true, passive: false });
     }
   }
 
@@ -650,6 +662,7 @@
         document.querySelector('h1.ytd-watch-metadata') ||
         document.querySelector('h1.ytd-video-primary-info-renderer') ||
         document.querySelector('.ytmusic-player-bar .title') ||
+        document.querySelector('.slim-video-information-title') ||
         document.querySelector('yt-formatted-string.title');
       if (ytTitle && ytTitle.textContent) {
         title = ytTitle.textContent.trim();
@@ -663,17 +676,25 @@
         document.querySelector('#owner #channel-name') ||
         document.querySelector('ytd-channel-name') ||
         document.querySelector('.ytmusic-player-bar .byline');
+      // m.youtube.com names the channel only in the avatar's label ("Blender, 1.26M subscribers. Go to channel.").
+      const owner = document.querySelector('a.slim-video-owner-icon');
+      const ownerName = owner && /^(.+?),\s[\d.,]+\s?[KMB]?\s/.exec(owner.getAttribute('aria-label') || '');
       if (ytArtist && ytArtist.textContent) {
         artist = ytArtist.textContent.trim();
+      } else if (ownerName) {
+        artist = ownerName[1];
       } else {
         artist = location.host.includes('music') ? 'YouTube Music' : 'YouTube';
       }
     }
 
     if (!artwork) {
-      // Try og:image or video poster or album art
-      const og = document.querySelector('meta[property="og:image"]');
-      if (og && og.content) artwork = og.content;
+      // Android WebView has no navigator.mediaSession, so the page never hands over artwork. og:image is the generic
+      // YouTube Music preview there, and stale after in-page navigation on YouTube: read the playing item instead.
+      const art = document.querySelector('ytmusic-player #song-image img, ytmusic-player img, ytmusic-player-bar img.image');
+      const id = videoIdOf(location.href);
+      if (art && /^https?:/.test(art.src)) artwork = art.src.replace(/=w\d+-h\d+/, '=w544-h544');
+      else if (id) artwork = 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg';
       else if (video && video.poster) artwork = video.poster;
     }
 
@@ -726,7 +747,7 @@
         };
       }
 
-      const sig = [playing, isVideo, meta.title, meta.artist, width, height].join('|');
+      const sig = [playing, isVideo, meta.title, meta.artist, meta.artwork, width, height].join('|');
       const now = Date.now();
       if (sig === lastSig && now - lastSentAt < 5000) return;
       lastSig = sig;
@@ -785,6 +806,21 @@
     'overflow:hidden!important;background:#000!important;z-index:2147483000!important}' +
     'video[data-ytf-pip]{object-fit:contain!important}[data-ytf-hide]{display:none!important}';
 
+  // The animated Subscribe button measures itself while hidden (docked, PiP, fullscreen) and keeps "width: 0px",
+  // so it disappeared after any of those. Give it its width back once the page is visible again.
+  function unzeroSubscribeSoon() {
+    const unzero = () => {
+      for (const c of document.querySelectorAll('.ytwAnimatedSubscribeButtonContentContainer')) {
+        if (c.style.width === '0px') c.style.removeProperty('width');
+      }
+    };
+    unzero();
+    setTimeout(unzero, 300);
+    setTimeout(unzero, 1200);
+  }
+  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) unzeroSubscribeSoon(); });
+  document.addEventListener('webkitfullscreenchange', () => { if (!document.webkitFullscreenElement) unzeroSubscribeSoon(); });
+
   function pipMark(el, attr) {
     el.setAttribute(attr, '1');
     pipSaved.push({ el: el, attr: attr });
@@ -830,6 +866,7 @@
     }
     const st = document.getElementById('ytf-pip-css');
     if (st) st.remove();
+    unzeroSubscribeSoon();
     window.dispatchEvent(new Event('resize'));
     setTimeout(() => window.dispatchEvent(new Event('resize')), 300);
   }
@@ -1309,7 +1346,13 @@
 
   // YouTube Music player page back helper
   window.__ytf_collapseMusicPlayer = function () {
-    var btn = document.querySelector('ytmusic-player-page button[aria-label*="lose"], ytmusic-player-page button.close-button, ytmusic-player-bar .chevron-down, button[aria-label="Close player page"], ytmusic-player-page [aria-label*="Back"]');
+    // The page's own handler: a programmatic click right after a touch is dropped by YouTube's ghost-click guard.
+    var page = document.querySelector('ytmusic-player-page[player-page-open]');
+    if (page && typeof page.onCollapseButtonClick === 'function') {
+      try { page.onCollapseButtonClick(); return true; } catch (e) {}
+    }
+    // querySelector with a list returns the first match in page order, not in list order: try the chevron first.
+    var btn = document.querySelector('ytmusic-player-page #collapse-button') || document.querySelector('ytmusic-player-page button[aria-label*="lose"], ytmusic-player-page button.close-button, ytmusic-player-bar .chevron-down, button[aria-label="Close player page"], ytmusic-player-page [aria-label*="Back"]');
     if (btn) {
       btn.click();
       return true;
@@ -1333,10 +1376,92 @@
       var musicObs = new MutationObserver(checkMusicPlayer);
       musicObs.observe(document.documentElement, { attributes: true, subtree: true, attributeFilter: ['player-page-open', 'player-ui-state', 'opened'] });
     } catch (e) {}
+
+    // YouTube Music's "Open in the YouTube Music app" prompt (dims the page and eats taps): close it when it opens.
+    // shortcut: matched by its English text, add other languages if it shows up in them.
+    var promoQueued = false;
+    new MutationObserver(function () {
+      if (promoQueued) return;
+      promoQueued = true;
+      setTimeout(function () {
+        promoQueued = false;
+        var dlgs = document.querySelectorAll('ytmusic-popup-container tp-yt-paper-dialog');
+        for (var i = 0; i < dlgs.length; i++) {
+          if (dlgs[i].opened && typeof dlgs[i].close === 'function' && /YouTube Music app/i.test(dlgs[i].textContent || '')) dlgs[i].close();
+        }
+      }, 250);
+    }).observe(document.documentElement, { childList: true, subtree: true });
+
+    // Song/video cards in horizontal shelves link only their artwork: the title under it was dead text. Open the card's
+    // own endpoint, as a tap on the artwork does. Titles that are links (albums, playlists) and artist links keep theirs.
+    document.addEventListener('click', function (e) {
+      var t = e.target;
+      if (!t.closest || t.closest('a[href], button, ytmusic-menu-renderer')) return;
+      var details = t.closest('ytmusic-two-row-item-renderer .details');
+      var card = details && details.closest('ytmusic-two-row-item-renderer');
+      var endpoint = card && card.data && card.data.navigationEndpoint;
+      if (!endpoint) return;
+      e.preventDefault();
+      e.stopPropagation();
+      card.dispatchEvent(new CustomEvent('yt-navigate', { bubbles: true, composed: true, detail: { endpoint: endpoint } }));
+    }, true);
+
+    // Drag the now-playing page down to collapse it, like the app (the web player only has the chevron).
+    // Starts on the artwork/top area only: the progress slider, buttons and the Up next sheet keep their own gestures.
+    var drag = null;
+    window.addEventListener('touchstart', function (e) {
+      drag = null;
+      var page = document.querySelector('ytmusic-player-page[player-page-open]');
+      var t = e.target;
+      if (!page || e.touches.length !== 1 || !t.closest || !t.closest('#main-panel')) return;
+      if (t.closest('#player-controls, ytmusic-menu-renderer, #collapse-button, #side-panel, button, tp-yt-paper-slider')) return;
+      drag = { page: page, x: e.touches[0].clientX, y: e.touches[0].clientY, dy: 0, on: false };
+    }, { capture: true, passive: true });
+    window.addEventListener('touchmove', function (e) {
+      if (!drag) return;
+      var dx = e.touches[0].clientX - drag.x;
+      drag.dy = e.touches[0].clientY - drag.y;
+      if (!drag.on) {
+        if (Math.abs(dx) > Math.abs(drag.dy) || drag.dy < -8) { drag = null; return; }
+        if (drag.dy < 12) return;
+        drag.on = true;
+        drag.page.style.transition = 'none';
+      }
+      e.preventDefault(); // keep the gesture: otherwise the WebView scrolls and cancels it halfway
+      e.stopImmediatePropagation(); // and the page must not read the lift as a tap on the artwork
+      drag.page.style.transform = 'translateY(' + Math.max(0, drag.dy) + 'px)';
+    }, { capture: true, passive: false });
+    var endDrag = function (e) {
+      var d = drag;
+      drag = null;
+      if (!d || !d.on) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      var page = d.page;
+      page.style.transition = 'transform .2s ease-out';
+      if (d.dy > Math.min(160, innerHeight * 0.2)) {
+        page.style.transform = 'translateY(' + innerHeight + 'px)';
+        setTimeout(function () {
+          window.__ytf_collapseMusicPlayer();
+          setTimeout(function () { page.style.transition = ''; page.style.transform = ''; }, 450);
+        }, 200);
+      } else {
+        page.style.transform = '';
+        setTimeout(function () { page.style.transition = ''; }, 220);
+      }
+    };
+    window.addEventListener('touchend', endDrag, { capture: true, passive: false });
+    window.addEventListener('touchcancel', endDrag, { capture: true, passive: false });
   }
 
   // Fullscreen helper for auto-rotate
   window.__ytf_requestFullscreen = function () {
+    // YouTube Music: only a music video goes fullscreen on rotation (like the app); a song's artwork stays portrait.
+    if (location.hostname.includes('music.youtube.com')) {
+      var mv = document.querySelector('ytmusic-player-page[player-page-open] ytmusic-player[video-mode] video');
+      if (mv && mv.requestFullscreen) mv.requestFullscreen().catch(function () {});
+      return;
+    }
     var btn = document.querySelector('button.fullscreen-icon, .ytp-fullscreen-button, button[aria-label*="ull screen"], button[aria-label*="ullscreen"]');
     if (btn) {
       btn.click();
