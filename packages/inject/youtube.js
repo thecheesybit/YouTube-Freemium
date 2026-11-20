@@ -371,8 +371,11 @@
       let touchStartX = 0;
       let touchStartScreenY = 0;
       let isTouchOnPlayer = false;
+      let touchTarget = null;
+      let touchPoint = null;
       let holdTimer = null;
       let holdBoosted = false;
+      let dragging = false;
       let originalRate = 1;
       // Ends a hold-for-2x: a finger that rested before dragging had already switched to 2x, and moving used to
       // drop the timer without putting the speed back (minimizing left the video at 2x).
@@ -384,6 +387,7 @@
           if (v && v.playbackRate === 2.0) v.playbackRate = originalRate;
         }
       };
+      window.__ytf_cancelHold = cancelHold;
 
       window.addEventListener('touchstart', (e) => {
         const t = e.touches && e.touches[0];
@@ -391,6 +395,8 @@
         touchStartY = t.clientY;
         touchStartX = t.clientX;
         touchStartScreenY = t.screenY;
+        touchTarget = e.target;
+        touchPoint = t;
         const target = e.target;
         isTouchOnPlayer = !!(target && target.closest && (target.closest('#player-container-id') || target.closest('video') || target.closest('.html5-video-player')));
 
@@ -399,10 +405,11 @@
           if (v && !v.paused) {
             originalRate = v.playbackRate || savedRate();
             cancelHold();
+            // 800 ms of a still finger: a grab that is about to become a drag-to-minimize must not flash 2x first.
             holdTimer = setTimeout(() => {
               holdTimer = null;
-              if (v && !v.paused) { holdBoosted = true; v.playbackRate = 2.0; }
-            }, 500);
+              if (v && !v.paused && !dragging) { holdBoosted = true; v.playbackRate = 2.0; }
+            }, 800);
           }
         }
       }, { capture: true, passive: true });
@@ -410,16 +417,23 @@
       // Dragging the video down follows the finger (the native view moves) and docks it, like the app.
       // Non-passive: once it is a downward drag the gesture is ours, else the page scrolls and cancels it halfway.
       let dragDy = 0;
-      let dragging = false;
       const bridgeDrag = (px) => { try { window.YouTubeFreemiumBridge.dragPlayer(px); } catch (err) {} };
       window.addEventListener('touchmove', (e) => {
         const t = e.touches && e.touches[0];
         if (!t) return;
         const dy = t.clientY - touchStartY;
         const dx = Math.abs(t.clientX - touchStartX);
-        if (Math.abs(dy) > 10 || dx > 10) cancelHold();
+        if (Math.abs(dy) > 6 || dx > 6) cancelHold();
         if (!isTouchOnPlayer || document.fullscreenElement || document.webkitFullscreenElement) return;
-        if (!dragging && dy > 12 && dy > dx * 1.5) dragging = true;
+        if (!dragging && dy > 12 && dy > dx * 1.5) {
+          dragging = true;
+          // From here the player sees no more of this touch, so tell it the touch was cancelled: otherwise its own
+          // press-and-hold 2x stays on (with its "2x" badge) and the lift could read as a tap.
+          try {
+            touchTarget.dispatchEvent(new TouchEvent('touchcancel', { bubbles: true, composed: true, cancelable: true,
+              touches: [], targetTouches: [], changedTouches: [touchPoint] }));
+          } catch (err) {}
+        }
         if (!dragging) return;
         e.preventDefault();
         e.stopImmediatePropagation(); // the player must not see the drag (it reads the lift as a tap: pause / next)
@@ -429,6 +443,7 @@
       }, { capture: true, passive: false });
 
       const endTouch = (e) => {
+        if (e && !e.isTrusted) return; // our own touchcancel above, meant for the player only
         if (dragging && e) {
           e.preventDefault();
           e.stopImmediatePropagation();
@@ -1348,7 +1363,18 @@
   // Phone native mini bar helper: isolate only the video while the player WebView is docked
   // miniOn stops the PiP watchdog below from undoing the isolation while the player is docked.
   let miniOn = false;
-  window.__ytf_setMini = function (on) { miniOn = !!on; if (on) pipEnter(); else pipExit(); };
+  window.__ytf_setMini = function (on) {
+    miniOn = !!on;
+    if (on) {
+      // Docking always plays at the user's speed: a hold-for-2x (or anything else) must not carry into the mini player.
+      if (window.__ytf_cancelHold) window.__ytf_cancelHold();
+      const v = findMainVideo();
+      if (v && !adState.active && v.playbackRate === 2 && savedRate() !== 2) v.playbackRate = savedRate();
+      pipEnter();
+    } else {
+      pipExit();
+    }
+  };
 
   // YouTube Music player page back helper
   window.__ytf_collapseMusicPlayer = function () {
