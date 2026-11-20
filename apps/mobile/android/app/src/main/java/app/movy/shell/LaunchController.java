@@ -15,9 +15,6 @@ import android.widget.FrameLayout;
  */
 final class LaunchController implements SourceRepository.Listener, ChooserView.Listener {
     private static final long SPLASH_HARD_CAP_MS = 1500;
-    /** Extra splash time for the one-time branded intro (about 3.5 s in total). */
-    private static final long INTRO_HOLD_MS = 2900;
-    private static boolean introPlayed;
     private static final int READY_PROGRESS = 70;
 
     private final Activity activity;
@@ -67,10 +64,7 @@ final class LaunchController implements SourceRepository.Listener, ChooserView.L
     /** Shows the splash, then opens the saved source or the chooser. */
     void start() {
         LiveConfig cfg = repo.config();
-        boolean intro = !introPlayed;
-        introPlayed = true;
-        if (intro) holdMs = Math.max(holdMs, INTRO_HOLD_MS);
-        splash = new SplashView(activity, appName, cfg, BuildConfig.VERSION_NAME, BuildConfig.MOVY_BUILD, remote, intro);
+        splash = new SplashView(activity, appName, cfg, BuildConfig.VERSION_NAME, BuildConfig.MOVY_BUILD, remote);
         content.addView(splash, new FrameLayout.LayoutParams(-1, -1));
         splashShownAt = SystemClock.elapsedRealtime();
         Source launch = repo.launchSource();

@@ -82,8 +82,9 @@ function tile(icon, letter, size, bg) {
 export async function generateIcons(o) {
   const letter = ([...o.appName.trim()][0] ?? 'Y').toUpperCase();
   const icon = o.iconPath ? await loadImage(o.iconPath) : null;
+  // YouTube-style apps: white tile behind the red play button, like the official launcher icon.
   const bg = o.name.includes('youtube')
-    ? '#E60000'
+    ? '#FFFFFF'
     : (icon && (dominantLight(icon) || cornerColor(icon))) || (icon ? o.backgroundColor : defaultColor(o.name));
 
   // Shared colors. movy_background is also used for window background / splash.
