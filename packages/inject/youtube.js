@@ -372,7 +372,18 @@
       let touchStartScreenY = 0;
       let isTouchOnPlayer = false;
       let holdTimer = null;
+      let holdBoosted = false;
       let originalRate = 1;
+      // Ends a hold-for-2x: a finger that rested before dragging had already switched to 2x, and moving used to
+      // drop the timer without putting the speed back (minimizing left the video at 2x).
+      const cancelHold = () => {
+        if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+        if (holdBoosted) {
+          holdBoosted = false;
+          const v = findMainVideo();
+          if (v && v.playbackRate === 2.0) v.playbackRate = originalRate;
+        }
+      };
 
       window.addEventListener('touchstart', (e) => {
         const t = e.touches && e.touches[0];
@@ -387,8 +398,10 @@
           const v = findMainVideo();
           if (v && !v.paused) {
             originalRate = v.playbackRate || savedRate();
+            cancelHold();
             holdTimer = setTimeout(() => {
-              if (v && !v.paused) v.playbackRate = 2.0;
+              holdTimer = null;
+              if (v && !v.paused) { holdBoosted = true; v.playbackRate = 2.0; }
             }, 500);
           }
         }
@@ -404,9 +417,7 @@
         if (!t) return;
         const dy = t.clientY - touchStartY;
         const dx = Math.abs(t.clientX - touchStartX);
-        if (Math.abs(dy) > 10 || dx > 10) {
-          if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
-        }
+        if (Math.abs(dy) > 10 || dx > 10) cancelHold();
         if (!isTouchOnPlayer || document.fullscreenElement || document.webkitFullscreenElement) return;
         if (!dragging && dy > 12 && dy > dx * 1.5) dragging = true;
         if (!dragging) return;
@@ -422,12 +433,7 @@
           e.preventDefault();
           e.stopImmediatePropagation();
         }
-        if (holdTimer) {
-          clearTimeout(holdTimer);
-          holdTimer = null;
-          const v = findMainVideo();
-          if (v && v.playbackRate === 2.0) v.playbackRate = originalRate;
-        }
+        cancelHold();
         if (!dragging) return;
         dragging = false;
         if (dragDy > 80 && window.YouTubeFreemiumBridge && window.YouTubeFreemiumBridge.minimize) {
