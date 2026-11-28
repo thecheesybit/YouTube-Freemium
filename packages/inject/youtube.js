@@ -672,6 +672,12 @@
     }
   } catch (e) {}
 
+  /** A silent feed preview (signed-in Home/Subscriptions/search), never real playback. */
+  function isFeedPreview(video) {
+    if (!video || location.host.includes('music.youtube.com')) return false;
+    return video.muted || (ROLE !== 'player' && !/^\/(watch|shorts)/.test(location.pathname));
+  }
+
   function extractMetadata(video) {
     let title = interceptedMetadata.title;
     let artist = interceptedMetadata.artist;
@@ -747,11 +753,15 @@
         return;
       }
 
-      const playing = video ? !video.paused && !video.ended : false;
       const isMusicHost = location.host.includes('music.youtube.com');
+      // Signed-in feeds play silent previews in a shared player on Home/Subscriptions/search. They are not
+      // playback: reported as playing they started the media notification ("YouTube / YouTube") and held it
+      // forever, undismissable. Real videos play on /watch (own WebView) or /shorts, with sound.
+      const preview = isFeedPreview(video);
+      const playing = video && !preview ? !video.paused && !video.ended : false;
       const isVideo = video ? (video.videoWidth > 0 && !isMusicHost) : false;
 
-      const meta = extractMetadata(video);
+      const meta = preview ? { title: '', artist: '', artwork: '' } : extractMetadata(video);
       const duration = (video && Number.isFinite(video.duration)) ? video.duration : 0;
       const position = (video && Number.isFinite(video.currentTime)) ? video.currentTime : 0;
       const width = video ? (video.videoWidth || 16) : 16;
@@ -1012,7 +1022,8 @@
   };
 
   document.addEventListener('play', (e) => {
-    if (e.target && e.target.tagName === 'VIDEO' && !adState.active) wantPlaying = true;
+    // A feed preview must not be "resumed" in the background.
+    if (e.target && e.target.tagName === 'VIDEO' && !adState.active && !isFeedPreview(e.target)) wantPlaying = true;
   }, true);
 
   let lastTouch = 0;
