@@ -61,6 +61,19 @@ public class MediaBridge {
         this.pipActive = active;
     }
 
+    /** Settings > Video Quality, shared by every WebView's bridge; set at startup and on change. */
+    private static volatile String videoQuality = "high";
+
+    public static void setVideoQuality(String q) {
+        videoQuality = q != null ? q : "high";
+    }
+
+    /** JS bridge: "high", "medium", "low" or "auto"; the page script applies it to each player. */
+    @JavascriptInterface
+    public String videoQuality() {
+        return videoQuality;
+    }
+
     /** JS bridge: returns true while the app is in the PiP window. Safe to call off the UI thread. */
     @JavascriptInterface
     public boolean inPip() {

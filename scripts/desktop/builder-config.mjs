@@ -8,7 +8,7 @@ export function electronBuilderConfig(cfg, { outDir, gen }) {
   return {
     appId: cfg.appId,
     productName: cfg.appName,
-    copyright: 'Crafted by Ayush Kumar',
+    copyright: cfg.appName,
     extraMetadata: {
       name: cfg.name,
       version: cfg.version,

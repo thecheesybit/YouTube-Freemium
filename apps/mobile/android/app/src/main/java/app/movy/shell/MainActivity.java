@@ -286,6 +286,7 @@ public class MainActivity extends BridgeActivity {
         applyRestOrientation();
         stats = new BlockStats(cfg.debug);
         prefs = new Prefs(this);
+        MediaBridge.setVideoQuality(prefs.videoQuality());
         AdblockSwitch.set(cfg.adblockEnabled && prefs.adblockEnabled());
         LiveConfig defaults = Defaults.load(this);
         LiveConfig initial = defaults;

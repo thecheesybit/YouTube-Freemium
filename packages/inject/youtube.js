@@ -1576,4 +1576,127 @@
   }, 400);
 
   setInterval(ensureSpeedChip, 1000);
+
+  // Global video quality (Settings > Video Quality) for videos, Shorts and music videos. YouTube starts phones
+  // at 360p; we seed its saved start quality before the player reads it, then pin each player to the choice.
+  const QUALITY_CAP = { high: 1080, medium: 480, low: 240 };
+  const LEVEL_PX = { tiny: 144, small: 240, medium: 360, large: 480, hd720: 720, hd1080: 1080, hd1440: 1440, hd2160: 2160, highres: 4320 };
+  function qualityPref() {
+    try { return String(window.YouTubeFreemiumBridge.videoQuality()); } catch (e) { return 'high'; }
+  }
+  /** Best level at or under the cap; when a video offers nothing that low, its lowest level. */
+  function pickLevel(levels, cap) {
+    const usable = levels.filter((l) => LEVEL_PX[l]).sort((a, b) => LEVEL_PX[b] - LEVEL_PX[a]);
+    return usable.find((l) => LEVEL_PX[l] <= cap) || usable[usable.length - 1] || null;
+  }
+  let seededFor = '';
+  function seedStartQuality(q) {
+    const px = QUALITY_CAP[q];
+    if (!px || seededFor === q) return;
+    seededFor = q;
+    try {
+      const now = Date.now();
+      localStorage.setItem('yt-player-quality', JSON.stringify({
+        data: JSON.stringify({ quality: px, previousQuality: px }), expiration: now + 30 * 864e5, creation: now
+      }));
+    } catch (e) {}
+  }
+  function applyQuality() {
+    const q = qualityPref();
+    seedStartQuality(q);
+    const cap = QUALITY_CAP[q];
+    if (!cap) return; // auto: leave YouTube's choice alone
+    for (const pl of document.querySelectorAll('.html5-video-player')) {
+      try {
+        if (typeof pl.getAvailableQualityLevels !== 'function' || typeof pl.setPlaybackQualityRange !== 'function') continue;
+        const level = pickLevel(pl.getAvailableQualityLevels() || [], cap);
+        if (!level) continue;
+        const vid = (pl.getVideoData && pl.getVideoData().video_id) || '';
+        const key = q + '|' + level + '|' + vid;
+        if (pl.__ytfQuality === key && pl.getPlaybackQuality() === level) continue;
+        pl.__ytfQuality = key;
+        pl.setPlaybackQualityRange(level, level);
+        if (typeof pl.setPlaybackQuality === 'function') pl.setPlaybackQuality(level);
+        if (DEBUG) ytfLog('quality ' + q + ' -> ' + level + ' ' + vid);
+      } catch (e) {}
+    }
+  }
+  seedStartQuality(qualityPref());
+  // Levels arrive with the stream; re-check on media events and on a slow tick (Shorts swap videos in place,
+  // and a change in Settings applies to the video already playing).
+  for (const ev of ['loadedmetadata', 'playing']) {
+    document.addEventListener(ev, (e) => {
+      if (e.target && e.target.tagName === 'VIDEO') setTimeout(applyQuality, 250);
+    }, true);
+  }
+  setInterval(applyQuality, 2000);
+
+  // Shorts: double-tap the right side to jump ahead 5 s, the left side to jump back; keep tapping to add more.
+  // The first tap of a double reaches YouTube (it toggles pause), so the state from before it is restored.
+  if (IS_TOP && !location.hostname.includes('music.youtube.com')) {
+    const SEEK_S = 5, DOUBLE_MS = 300, CHAIN_MS = 700;
+    let lastTap = null; // { side, at, wasPlaying }
+    let chain = null;   // { side, until, total }
+    let bubble = null, bubbleTimer = null;
+    const shortsVideo = () => document.querySelector('ytm-shorts-player .html5-video-player video, .reel-player video, #player-container-id video') || findMainVideo();
+    const sideOf = (t, x) => {
+      if (!/^\/shorts\//.test(location.pathname) || !t || !t.closest) return null;
+      if (!t.closest('ytm-shorts-gesture-overlay-controls, #gesture-layer, .touch-controls')) return null;
+      if (t.closest('button, a, [role="button"]')) return null;
+      const w = window.innerWidth;
+      return x < w * 0.35 ? 'back' : x > w * 0.65 ? 'fwd' : null;
+    };
+    const showBubble = (side, total) => {
+      if (!bubble) {
+        bubble = document.createElement('div');
+        bubble.style.cssText = 'position:fixed;top:45%;z-index:2147483600;padding:10px 16px;border-radius:999px;' +
+          'background:rgba(16,15,19,0.66);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);' +
+          'border:1px solid rgba(255,255,255,0.14);color:#f5f4f7;font:700 15px/1 system-ui,sans-serif;' +
+          'pointer-events:none;transition:opacity 160ms ease;';
+        document.documentElement.appendChild(bubble);
+      }
+      bubble.textContent = (side === 'fwd' ? '+' : '−') + total + 's';
+      bubble.style.left = side === 'fwd' ? 'auto' : '24px';
+      bubble.style.right = side === 'fwd' ? '24px' : 'auto';
+      bubble.style.opacity = '1';
+      clearTimeout(bubbleTimer);
+      bubbleTimer = setTimeout(() => { if (bubble) bubble.style.opacity = '0'; }, 650);
+    };
+    const seek = (side) => {
+      const v = shortsVideo();
+      if (!v || !Number.isFinite(v.duration)) return;
+      v.currentTime = Math.max(0, Math.min(v.duration - 0.25, v.currentTime + (side === 'fwd' ? SEEK_S : -SEEK_S)));
+    };
+    const swallow = (e) => { e.preventDefault(); e.stopImmediatePropagation(); };
+    window.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) { lastTap = null; return; }
+      const t = e.touches[0];
+      const side = sideOf(e.target, t.clientX);
+      if (!side) return;
+      const now = Date.now();
+      const inChain = chain && chain.side === side && now < chain.until;
+      const isDouble = lastTap && lastTap.side === side && now - lastTap.at < DOUBLE_MS;
+      if (!inChain && !isDouble) {
+        const v = shortsVideo();
+        lastTap = { side, at: now, wasPlaying: !!(v && !v.paused) };
+        return; // a normal tap: YouTube handles it
+      }
+      swallow(e); // a seek tap: YouTube must not see it (no pause toggle, no hold-for-2x)
+      const v = shortsVideo();
+      if (isDouble && !inChain) {
+        chain = { side, until: 0, total: 0 };
+        if (v && lastTap.wasPlaying && v.paused) v.play().catch(() => {});
+        if (v && !lastTap.wasPlaying && !v.paused) v.pause();
+      }
+      lastTap = null;
+      chain.until = now + CHAIN_MS;
+      chain.total += SEEK_S;
+      chain.swallowEnd = true;
+      seek(side);
+      showBubble(side, chain.total);
+    }, { capture: true, passive: false });
+    window.addEventListener('touchend', (e) => {
+      if (chain && chain.swallowEnd) { chain.swallowEnd = false; swallow(e); }
+    }, { capture: true, passive: false });
+  }
 })();

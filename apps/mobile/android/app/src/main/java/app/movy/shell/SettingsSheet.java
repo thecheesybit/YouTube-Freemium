@@ -461,6 +461,12 @@ final class SettingsSheet extends FrameLayout implements SettingsModel.Actions, 
     }
 
     @Override
+    public void openVideoQuality() {
+        push(buildPage(activity.getString(R.string.movy_video_quality), false,
+                () -> SettingsModel.videoQualityPage(activity, inputs(), this)));
+    }
+
+    @Override
     public void checkSources() {
         checking = true;
         health.refreshNow();

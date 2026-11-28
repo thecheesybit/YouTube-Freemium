@@ -47,7 +47,12 @@
     <string name="movy_notification_channel_playback">YouTube Freemium Playback</string>
     <string name="movy_notification_rationale">Allow notifications to control playback from the lock screen.</string>
     <string name="movy_sec_about">About</string>
-    <string name="movy_by_credit">by %1$s</string>
+    <string name="movy_video_quality">Video Quality</string>
+    <string name="movy_quality_high">High (up to 1080p)</string>
+    <string name="movy_quality_medium">Medium (480p)</string>
+    <string name="movy_quality_low">Low (240p, saves data)</string>
+    <string name="movy_quality_auto">Auto (YouTube decides)</string>
+    <string name="movy_quality_footer">Every video, Short and music video starts in this quality. Falls back to the closest quality a video offers.</string>
     <string name="movy_done">Done</string>
     <string name="movy_clear_cache_confirm">Clear</string>
     <string name="movy_source_footer">The source that opens when you launch the app.</string>

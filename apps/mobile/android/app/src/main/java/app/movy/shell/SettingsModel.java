@@ -25,6 +25,8 @@ final class SettingsModel {
         void setAdblock(boolean on);
 
         void openDefaultSource();
+
+        void openVideoQuality();
     }
 
     /** Live inputs; read each time the list is rebuilt. */
@@ -66,15 +68,42 @@ final class SettingsModel {
         LiveConfig cfg = in.repo.config();
         out.add(sourceSection(ctx, in, act, cfg));
         if (in.adblockConfigured) out.add(protectionSection(ctx, in, act));
-        out.add(playbackSection(ctx, in));
+        out.add(playbackSection(ctx, in, act));
         out.add(sourcesSection(ctx, in, act, cfg));
         out.add(storageSection(ctx, in, act));
         out.add(aboutSection(ctx, in, cfg));
         return Collections.unmodifiableList(out);
     }
 
-    private static SettingsSection playbackSection(Context ctx, Inputs in) {
+    /** Video quality choices, in menu order: pref value and its label. */
+    static final String[] QUALITY_IDS = {"high", "medium", "low", "auto"};
+    private static final int[] QUALITY_LABELS = {R.string.movy_quality_high, R.string.movy_quality_medium,
+            R.string.movy_quality_low, R.string.movy_quality_auto};
+
+    static String qualityLabel(Context ctx, String id) {
+        for (int i = 0; i < QUALITY_IDS.length; i++) if (QUALITY_IDS[i].equals(id)) return ctx.getString(QUALITY_LABELS[i]);
+        return ctx.getString(R.string.movy_quality_high);
+    }
+
+    /** Sub-page of "Video quality": one checkmark list; the page script reads the choice for every video. */
+    static List<SettingsSection> videoQualityPage(Context ctx, Inputs in, Actions act) {
         List<SettingsRow> rows = new ArrayList<>();
+        String current = in.prefs.videoQuality();
+        for (int i = 0; i < QUALITY_IDS.length; i++) {
+            final String id = QUALITY_IDS[i];
+            rows.add(SettingsRow.check(ctx.getString(QUALITY_LABELS[i]), id.equals(current), UiTokens.BADGE_BLUE, () -> {
+                in.prefs.setVideoQuality(id);
+                MediaBridge.setVideoQuality(id);
+                act.rebuild();
+            }));
+        }
+        return Collections.singletonList(SettingsSection.of(null, ctx.getString(R.string.movy_quality_footer), rows));
+    }
+
+    private static SettingsSection playbackSection(Context ctx, Inputs in, Actions act) {
+        List<SettingsRow> rows = new ArrayList<>();
+        rows.add(SettingsRow.nav(ctx.getString(R.string.movy_video_quality), qualityLabel(ctx, in.prefs.videoQuality()),
+                UiTokens.BADGE_PURPLE, R.drawable.ic_gear, act::openVideoQuality));
         rows.add(SettingsRow.toggle(ctx.getString(R.string.movy_pip_toggle), in.prefs.pipEnabled(),
                 UiTokens.BADGE_BLUE, R.drawable.ic_play, on -> in.prefs.setPipEnabled(on)));
         rows.add(SettingsRow.toggle(ctx.getString(R.string.movy_background_play_toggle), in.prefs.backgroundPlayEnabled(),
@@ -160,7 +189,7 @@ final class SettingsModel {
         String ver = ctx.getString(R.string.movy_version, BuildConfig.VERSION_NAME, BuildConfig.MOVY_BUILD);
         if (BuildConfig.MOVY_REMOTE && cfg.contentVersion > 0) ver += ctx.getString(R.string.movy_cfg_suffix, cfg.contentVersion);
         List<SettingsRow> rows = new ArrayList<>();
-        rows.add(SettingsRow.about(in.icon, in.appName, cfg.tagline, ctx.getString(R.string.movy_by_credit, cfg.credit), ver));
+        rows.add(SettingsRow.about(in.icon, in.appName, cfg.tagline, ver));
         return SettingsSection.of(ctx.getString(R.string.movy_sec_about), null, rows);
     }
 }

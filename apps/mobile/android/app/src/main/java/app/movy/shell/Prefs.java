@@ -110,6 +110,15 @@ public final class Prefs {
         sp.edit().putBoolean("backgroundPlayEnabled", on).apply();
     }
 
+    /** Global video quality from Settings: "high" (default), "medium", "low" or "auto" (YouTube decides). */
+    public String videoQuality() {
+        return sp.getString("videoQuality", "high");
+    }
+
+    public void setVideoQuality(String q) {
+        sp.edit().putString("videoQuality", q).apply();
+    }
+
     /** Island vertical position as a 0..1 fraction (W5b). */
     public float islandY() {
         return sp.getFloat(ISLAND_Y, 0.4f);

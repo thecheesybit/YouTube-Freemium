@@ -36,7 +36,7 @@ export function buildAppConfig(cfg, { adblockOn, buildNumber, key }) {
     appId: cfg.appId,
     version: cfg.version,
     build: buildNumber,
-    credit: cfg.credit ?? 'Ayush Kumar',
+    credit: cfg.credit ?? '',
     tagline: cfg.tagline ?? 'Ad-free YouTube and YouTube Music',
     obfKey: key.toString('base64'),
     defaults: obfuscateHosts(buildDefaults(cfg, key), key, cfg.authHosts ?? []),
