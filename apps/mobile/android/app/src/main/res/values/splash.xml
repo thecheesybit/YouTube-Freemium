@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Music Player design system "canvas": the one ground shared by the system splash and SplashView. -->
+    <color name="splash_canvas">#0B0A0E</color>
+</resources>

@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.text.TextUtils;
-import android.transition.TransitionManager;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -256,38 +255,84 @@ final class PlayerHost {
         if (state != State.FULL) return;
         float px = Math.max(0f, cssPx) * activity.getResources().getDisplayMetrics().density;
         container.animate().cancel();
-        if (px == 0f) container.animate().translationY(0f).setDuration(180).start();
-        else container.setTranslationY(px);
+        if (px == 0f) {
+            container.animate().translationY(0f).scaleX(1f).scaleY(1f).setDuration(220)
+                    .setInterpolator(EASE_OUT).withLayer().start();
+        } else {
+            container.setTranslationY(px);
+            float s = 1f - 0.06f * Math.min(1f, px / Math.max(1f, dockTravel()));
+            container.setScaleX(s);
+            container.setScaleY(s);
+        }
     }
 
+    private static final android.view.animation.Interpolator EASE_OUT = new android.view.animation.DecelerateInterpolator(2f);
+    private static final long DOCK_MS = 260;
+
+    /** Distance from the full player's top to the docked bar's top: the path both transitions travel. */
+    private float dockTravel() {
+        ViewGroup parent = (ViewGroup) container.getParent();
+        float density = activity.getResources().getDisplayMetrics().density;
+        int h = parent != null ? parent.getHeight() : activity.getResources().getDisplayMetrics().heightPixels;
+        return Math.max(0f, h - bottomNavHeightPx - 64 * density);
+    }
+
+    // Transform-only motion (no per-frame relayout of the WebView): slide from wherever the finger left
+    // the player down to the bar, then swap to the docked layout once and settle it in.
     public void minimize() {
         if (state != State.FULL || playerWebView == null) return;
-        container.animate().cancel();
-        container.setTranslationY(0f);
-
-        // Tell player page to isolate only the video element before resizing
-        playerWebView.evaluateJavascript("window.__ytf_setMini&&window.__ytf_setMini(true)", null);
-
-        ViewGroup parent = (ViewGroup) container.getParent();
-        if (parent != null) TransitionManager.beginDelayedTransition(parent);
-
         state = State.MINI;
-        applyMiniLayout();
+        container.animate().cancel();
+        container.setPivotX(container.getWidth() / 2f);
+        container.setPivotY(0f);
+        container.animate().translationY(dockTravel()).scaleX(0.94f).scaleY(0.94f).alpha(0f)
+                .setDuration(DOCK_MS).setInterpolator(EASE_OUT).withLayer().withEndAction(() -> {
+                    if (state != State.MINI) return;
+                    // Tell player page to isolate only the video element before resizing
+                    playerWebView.evaluateJavascript("window.__ytf_setMini&&window.__ytf_setMini(true)", null);
+                    applyMiniLayout();
+                    resetTransform(Math.round(16 * activity.getResources().getDisplayMetrics().density), 0f);
+                    container.animate().translationY(0f).alpha(1f).setDuration(180).setInterpolator(EASE_OUT).start();
+                }).start();
         host.onPlayerStateChanged(state);
     }
 
     public void expand() {
         if (state != State.MINI || playerWebView == null) return;
-
-        ViewGroup parent = (ViewGroup) container.getParent();
-        if (parent != null) TransitionManager.beginDelayedTransition(parent);
-
         state = State.FULL;
-        applyFullLayout();
-
+        container.animate().cancel();
         // Restore normal page layout
         playerWebView.evaluateJavascript("window.__ytf_setMini&&window.__ytf_setMini(false)", null);
+        applyFullLayout();
+        resetTransform(dockTravel(), 0f);
+        container.setPivotX(container.getWidth() / 2f);
+        container.setPivotY(0f);
+        container.setScaleX(0.94f);
+        container.setScaleY(0.94f);
+        // Slide up only once Chromium has painted the page at its new size; otherwise a blank sheet rises.
+        final boolean[] started = {false};
+        Runnable go = () -> {
+            if (started[0] || state != State.FULL) return;
+            started[0] = true;
+            container.animate().translationY(0f).scaleX(1f).scaleY(1f).alpha(1f)
+                    .setDuration(300).setInterpolator(EASE_OUT).withLayer().start();
+        };
+        playerWebView.postVisualStateCallback(++expandSeq, new WebView.VisualStateCallback() {
+            @Override public void onComplete(long requestId) {
+                container.post(go);
+            }
+        });
+        container.postDelayed(go, 250); // fallback: never leave the player hidden
         host.onPlayerStateChanged(state);
+    }
+
+    private long expandSeq;
+
+    private void resetTransform(float translationY, float alpha) {
+        container.setScaleX(1f);
+        container.setScaleY(1f);
+        container.setTranslationY(translationY);
+        container.setAlpha(alpha);
     }
 
     public void close() {
@@ -296,7 +341,7 @@ final class PlayerHost {
         }
         isPlaying = false;
         container.animate().cancel();
-        container.setTranslationY(0f);
+        resetTransform(0f, 1f);
         container.setVisibility(View.GONE);
         state = State.HIDDEN;
         host.onPlayerStateChanged(state);

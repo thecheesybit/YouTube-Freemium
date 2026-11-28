@@ -1411,18 +1411,53 @@
 
     // YouTube Music's "Open in the YouTube Music app" prompt (dims the page and eats taps): close it when it opens.
     // shortcut: matched by its English text, add other languages if it shows up in them.
+    // The upsell / mealbar promo renderers are hidden by CSS above, but YouTube still opens their modal dialog and its
+    // full-page backdrop: an invisible layer that lets the page scroll yet eats every tap. Close those dialogs properly.
+    var PROMO_IN_DIALOG = 'ytmusic-upsell-dialog-renderer, ytmusic-mealbar-promo-renderer, a[href*="play.google.com"], a[href^="intent:"], a[href^="market:"]';
+    function clearTapShields() {
+      var dlgs = document.querySelectorAll('ytmusic-popup-container tp-yt-paper-dialog');
+      var anyOpen = false;
+      for (var i = 0; i < dlgs.length; i++) {
+        var d = dlgs[i];
+        if (!d.opened || typeof d.close !== 'function') continue;
+        if (d.querySelector(PROMO_IN_DIALOG) || /YouTube Music app/i.test(d.textContent || '')) {
+          ytfLog('music: closing tap-blocking promo dialog');
+          d.close();
+        } else {
+          anyOpen = true; // a real dialog (save to playlist, sign-in...), even while it is still loading
+        }
+      }
+      // Safety net: a backdrop with no dialog open above it is never wanted.
+      if (anyOpen) return;
+      var bds = document.querySelectorAll('tp-yt-iron-overlay-backdrop, iron-overlay-backdrop');
+      for (var j = 0; j < bds.length; j++) {
+        var b = bds[j];
+        if (!(b.opened || b.classList.contains('opened'))) continue;
+        ytfLog('music: dropping orphan overlay backdrop');
+        if (typeof b.close === 'function') b.close();
+        b.classList.remove('opened');
+        b.style.pointerEvents = 'none';
+      }
+    }
     var promoQueued = false;
-    new MutationObserver(function () {
+    var promoObs = new MutationObserver(function () {
       if (promoQueued) return;
       promoQueued = true;
       setTimeout(function () {
         promoQueued = false;
-        var dlgs = document.querySelectorAll('ytmusic-popup-container tp-yt-paper-dialog');
-        for (var i = 0; i < dlgs.length; i++) {
-          if (dlgs[i].opened && typeof dlgs[i].close === 'function' && /YouTube Music app/i.test(dlgs[i].textContent || '')) dlgs[i].close();
-        }
+        clearTapShields();
       }, 250);
-    }).observe(document.documentElement, { childList: true, subtree: true });
+    });
+    // At document start there may be no root element yet; observe() would throw and abort the rest of this block.
+    (function watchPromos() {
+      if (!document.documentElement) return void setTimeout(watchPromos, 0);
+      promoObs.observe(document.documentElement, { childList: true, subtree: true });
+    })();
+    // Dialogs open by toggling properties, not always nodes: also check whenever a tap lands on a backdrop.
+    window.addEventListener('pointerdown', function (e) {
+      var t = e.target;
+      if (t && t.tagName && /OVERLAY-BACKDROP$/.test(t.tagName)) clearTapShields();
+    }, true);
 
     // Song/video cards in horizontal shelves link only their artwork: the title under it was dead text. Open the card's
     // own endpoint, as a tap on the artwork does. Titles that are links (albums, playlists) and artist links keep theirs.

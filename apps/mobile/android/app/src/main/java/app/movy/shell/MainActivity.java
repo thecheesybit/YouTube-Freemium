@@ -85,6 +85,8 @@ public class MainActivity extends BridgeActivity {
     private volatile String pageUrl = "";
 
     private boolean isMediaPlaying = false;
+    // YouTube Music plays in the main WebView; while it plays it owns the notification, even with a YouTube player docked.
+    private volatile boolean musicOwns = false;
     private AdPill adPill;
     private MediaBridge mediaBridge;
     private PlayerHost player;
@@ -107,7 +109,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     private WebView mediaView() {
-        return player != null && player.state() != PlayerHost.State.HIDDEN && player.webView() != null
+        return !musicOwns && player != null && player.state() != PlayerHost.State.HIDDEN && player.webView() != null
                 ? player.webView()
                 : (bridge != null ? bridge.getWebView() : null);
     }
@@ -171,6 +173,9 @@ public class MainActivity extends BridgeActivity {
         getWindow().setNavigationBarColor(color); // applyBarAppearance also darkens the nav handle; keep it on a matching bar
         View content = findViewById(android.R.id.content);
         if (content != null) content.setBackgroundColor(color);
+        // Tiles Chromium has not painted yet during a fling show the WebView's own background: match the page,
+        // or a light page flashes dark blocks while scrolling.
+        if (bridge != null && bridge.getWebView() != null) bridge.getWebView().setBackgroundColor(color);
         applyBarAppearance(color);
     }
 
@@ -395,6 +400,8 @@ public class MainActivity extends BridgeActivity {
                 @Override public void onMediaState(boolean isPlaying, boolean isVideo, String title, String artist,
                                                   String artworkUrl, double duration, double position,
                                                   int width, int height, int left, int top, int right, int bottom) {
+                    if (isPlaying) musicOwns = false;
+                    else if (musicOwns) return;
                     onMediaStateUpdated(isPlaying, isVideo, title, artist, artworkUrl, duration, position, width, height, left, top, right, bottom);
                 }
                 @Override public void onAdSkipping(boolean on) {
@@ -444,7 +451,9 @@ public class MainActivity extends BridgeActivity {
         }
         // TV has no second WebView: its role keeps youtube.js off the phone-only paths (swallowed watch links, paused /watch videos).
         mediaBridge = new MediaBridge(cfg.tv ? "tv" : "browse", (isPlaying, isVideo, title, artist, artworkUrl, duration, position, width, height, left, top, right, bottom) -> {
-            if (player != null && player.state() != PlayerHost.State.HIDDEN) return;
+            boolean music = repo != null && repo.active() != null && "youtube-music".equals(repo.active().id);
+            musicOwns = music && (isPlaying || musicOwns);
+            if (player != null && player.state() != PlayerHost.State.HIDDEN && !musicOwns) return;
             runOnUiThread(() -> onMediaStateUpdated(isPlaying, isVideo, title, artist, artworkUrl, duration, position, width, height, left, top, right, bottom));
         }, new MediaBridge.Host() {
             @Override public void openVideo(String url) {
@@ -638,6 +647,8 @@ public class MainActivity extends BridgeActivity {
         s.setSupportMultipleWindows(true);
         s.setJavaScriptCanOpenWindowsAutomatically(true);
         s.setAllowFileAccess(false);
+        // Raster the page even while the view moves or sits behind the player: no blank frames when it comes back.
+        if (!cfg.tv) s.setOffscreenPreRaster(true);
         if (cfg.tv) {
             // TV renders the page at a wider layout width (profile viewportWidth, default 1280 CSS px) and scales it to fit.
             s.setUseWideViewPort(true);

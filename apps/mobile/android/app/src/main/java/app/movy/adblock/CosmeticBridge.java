@@ -94,6 +94,10 @@ public final class CosmeticBridge {
             try {
                 youtube = readAsset(ctx, "shell/youtube.js");
             } catch (Exception ignored) {}
+            // Music Player skin: the script exits on every host except music.youtube.com.
+            try {
+                youtube = (youtube != null ? youtube + "\n" : "") + readAsset(ctx, "shell/music-skin.js");
+            } catch (Exception ignored) {}
             if (tv) tvnav = readAsset(ctx, "shell/tvnav-pure.js") + "\n" + readAsset(ctx, "shell/tvnav.js") + "\n" + readAsset(ctx, "shell/tvfs.js"); // each file is its own IIFE
         } catch (Exception e) {
             Log.e(TAG, "cannot prepare cosmetic script", e);

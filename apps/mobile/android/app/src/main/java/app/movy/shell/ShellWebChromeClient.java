@@ -105,7 +105,7 @@ public class ShellWebChromeClient extends BridgeWebChromeClient {
         applyOrientation(true);
         if (cfg.debug) for (long d : new long[] {300, 1500, 4000}) main.postDelayed(() -> logState("t+" + d), d);
         Window w = activity.getWindow();
-        customContainer = new FrameLayout(activity);
+        customContainer = cfg.tv ? new FrameLayout(activity) : new SwipeDownExit(activity, this::onHideCustomView);
         customContainer.setBackgroundColor(0xFF000000);
         customContainer.addView(view, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));

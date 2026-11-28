@@ -94,7 +94,7 @@ export function writeAdblockAssets(cfg, engine) {
   const shell = path.join(MAIN, 'assets', 'shell');
   fs.rmSync(shell, { recursive: true, force: true });
   fs.mkdirSync(shell, { recursive: true });
-  for (const f of ['loading.js', 'navguard.js', 'scamguard.js', 'youtube.js', 'youtube-selectors.json', ...(cfg.target === 'tv' ? TV_SCRIPTS : [])]) {
+  for (const f of ['loading.js', 'navguard.js', 'scamguard.js', 'youtube.js', 'youtube-selectors.json', 'music-skin.js', ...(cfg.target === 'tv' ? TV_SCRIPTS : [])]) {
     const src = path.join(ROOT, 'packages', 'inject', f);
     if (fs.existsSync(src)) fs.copyFileSync(src, path.join(shell, f));
   }
